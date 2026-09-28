@@ -21,18 +21,33 @@ mac:
   category: public.app-category.productivity
   target:
     - target: dmg
-    - target: dir
+      arch: [arm64, x64]
   identity: "-"
   hardenedRuntime: false
   extendInfo:
     NSMicrophoneUsageDescription: ChatGPT voice conversations need access to the microphone.
     NSCameraUsageDescription: ChatGPT video features need access to the camera.
 dmg:
-  artifactName: ${productName}-${version}-${arch}.${ext}
+  artifactName: ChatGPT-Tabs-${version}-mac-${arch}.${ext}
   writeUpdateInfo: false
 win:
-  target: nsis
+  target:
+    - target: nsis
+      arch: [x64]
+    - target: zip
+      arch: [x64]
+  artifactName: ChatGPT-Tabs-${version}-win-${arch}-portable.${ext}
+nsis:
+  artifactName: ChatGPT-Tabs-${version}-win-${arch}-setup.${ext}
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: ChatGPT Tabs
+  deleteAppDataOnUninstall: false
 linux:
   target: AppImage
   category: Utility
+  artifactName: ChatGPT-Tabs-${version}-linux-${arch}.${ext}
 publish: null

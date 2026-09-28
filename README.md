@@ -12,11 +12,57 @@ A **Chrome-style tabbed** desktop client for the ChatGPT web app (Electron + Typ
 
 ---
 
+## Download
+
+**➡️ [Download the latest release](../../releases/latest)**
+
+| Platform | File | Notes |
+| --- | --- | --- |
+| macOS – Apple Silicon (M1/M2/M3/M4) | `ChatGPT-Tabs-<version>-mac-arm64.dmg` | macOS 12 Monterey or newer |
+| macOS – Intel | `ChatGPT-Tabs-<version>-mac-x64.dmg` | macOS 12 Monterey or newer |
+| Windows 10/11 (installer) | `ChatGPT-Tabs-<version>-win-x64-setup.exe` | Installs per user, no admin rights needed; adds Start menu + desktop shortcut |
+| Windows 10/11 (portable) | `ChatGPT-Tabs-<version>-win-x64-portable.zip` | No installation: unzip and run `ChatGPT Tabs.exe` |
+| Checksums | `SHA256SUMS.txt` | SHA-256 of every file above |
+
+Not sure which Mac you have?  → Apple menu → **About This Mac**: "Chip: Apple M…" = Apple Silicon, "Processor: Intel" = Intel.
+Windows on ARM devices can use the x64 build (it runs under Windows' built-in emulation).
+
+### Verify your download (recommended)
+
+The builds are not signed with a paid certificate (see below), so checking the SHA-256 hash against `SHA256SUMS.txt` from the same release is the way to make sure the file was not tampered with:
+
+```bash
+# macOS
+shasum -a 256 ~/Downloads/ChatGPT-Tabs-*-mac-arm64.dmg
+```
+
+```powershell
+# Windows (PowerShell)
+Get-FileHash $env:USERPROFILE\Downloads\ChatGPT-Tabs-*-win-x64-setup.exe -Algorithm SHA256
+```
+
+The printed hash must match the line for that file in `SHA256SUMS.txt`. Only download from this repository's Releases page.
+
+### Install on macOS
+
+1. Open the `.dmg` and drag **ChatGPT Tabs** into **Applications**.
+2. The first launch is blocked because the app is not notarized by Apple ("Apple could not verify…" / "cannot be opened"). Allow it **once**, either way:
+   - **System Settings → Privacy & Security**, scroll down to the message about "ChatGPT Tabs" → **Open Anyway** → confirm; or
+   - in Terminal: `xattr -dr com.apple.quarantine "/Applications/ChatGPT Tabs.app"`
+3. After that it opens normally. Microphone access for voice chat is requested by macOS on first use.
+
+### Install on Windows
+
+- **Installer:** run `…-setup.exe`. Windows SmartScreen may show "Windows protected your PC" because the file is not code-signed: click **More info → Run anyway**. You can choose the install folder; the app is installed for the current user only. Uninstall via **Settings → Apps**. Your ChatGPT login (in `%APPDATA%\ChatGPT Tabs`) is kept on uninstall; use *Clear ChatGPT Session* first if you want it removed.
+- **Portable:** unzip `…-portable.zip` anywhere and run `ChatGPT Tabs.exe` (SmartScreen may ask once as well).
+
+---
+
 ## Contents
 
-1. [Quick start](#quick-start)
-2. [Scripts](#scripts)
-3. [Package output (.app / .dmg)](#package-output-app--dmg)
+1. [Download](#download)
+2. [Build from source](#build-from-source)
+3. [Publishing a release](#publishing-a-release)
 4. [First ChatGPT login](#first-chatgpt-login)
 5. [Clearing the session](#clearing-the-session)
 6. [Keyboard shortcuts](#keyboard-shortcuts)
@@ -29,23 +75,47 @@ A **Chrome-style tabbed** desktop client for the ChatGPT web app (Electron + Typ
 
 ---
 
-## Quick start
+## Build from source
 
-Requirement: Node.js 20+ (developed with Node 24). Electron is **not** installed globally; it comes in as a project `devDependency`.
+Anyone can build their own copy; the result is identical in behaviour to the release downloads.
+
+**Requirements**
+
+- Node.js 20 or newer (the project pins 24 in `.nvmrc`) and npm
+- Git
+- macOS builds must run on macOS; the Windows installer must be built on Windows (the NSIS tool electron-builder uses is not available for Apple Silicon Macs)
+- No global Electron install: Electron is a project `devDependency`
+
+**Get the code and run it**
 
 ```bash
-npm install        # dependencies + Electron binary
-npm run dev        # development mode (UI with hot reload)
+git clone <this repository URL>
+cd <repository folder>
+npm ci             # exact dependency versions from package-lock.json (+ Electron binary)
+npm run dev        # development mode, UI hot reload
 ```
 
-Production package:
+**Build installable packages**
+
+| On | Command | Output in `release/` |
+| --- | --- | --- |
+| macOS | `npm run package` | `ChatGPT-Tabs-<version>-mac-arm64.dmg`, `ChatGPT-Tabs-<version>-mac-x64.dmg`, plus the unpacked apps in `mac-arm64/` and `mac/` |
+| Windows | `npm run package:win` | `ChatGPT-Tabs-<version>-win-x64-setup.exe`, `ChatGPT-Tabs-<version>-win-x64-portable.zip`, plus `win-unpacked\ChatGPT Tabs.exe` |
+| Linux | `npm run package:linux` | `ChatGPT-Tabs-<version>-linux-x64.AppImage` (not part of official releases) |
+
+Then run the automatic smoke test against the packaged app (`npm run smoke:package`) or just open it:
 
 ```bash
-npm run package    # typecheck + build + macOS .app and .dmg
-open "release/mac-arm64/ChatGPT Tabs.app"
+open "release/mac-arm64/ChatGPT Tabs.app"      # macOS (Apple Silicon)
 ```
 
-## Scripts
+```powershell
+& "release\win-unpacked\ChatGPT Tabs.exe"      # Windows
+```
+
+A self-built Mac app is ad-hoc signed and opens directly on the machine that built it. For public distribution with no security prompts you need an Apple Developer ID certificate + notarization (macOS) and an Authenticode certificate (Windows); configure them in `electron-builder.yml` / via the standard electron-builder `CSC_*` environment variables.
+
+### Scripts
 
 | Script | What it does |
 | --- | --- |
@@ -57,24 +127,31 @@ open "release/mac-arm64/ChatGPT Tabs.app"
 | `npm test` | Unit tests (Vitest) + Electron E2E tests (Playwright) |
 | `npm run test:unit` | Unit tests only |
 | `npm run test:e2e` | Build + Playwright tests against the real Electron app |
-| `npm run package` | macOS `.app` + `.dmg` (arm64 on Apple Silicon) |
-| `npm run package:win` / `package:linux` | Windows NSIS / Linux AppImage (run on that OS) |
-| `npm run smoke:package` | Launches the packaged app with an isolated profile and smoke-tests it automatically |
-| `npm run verify` | lint → typecheck → test → package → smoke:package (everything) |
+| `npm run package` | macOS `.dmg` for Apple Silicon and Intel |
+| `npm run package:win` | Windows installer + portable `.zip` (run on Windows) |
+| `npm run package:linux` | Linux AppImage (run on Linux) |
+| `npm run smoke:package` | Launches the packaged app for the current OS with an isolated profile and smoke-tests it |
+| `npm run verify` | lint → typecheck → test → package (macOS) → smoke:package |
 
-## Package output (.app / .dmg)
+## Publishing a release
 
-After `npm run package`:
+Releases are built by GitHub Actions on real macOS and Windows machines, so nobody has to build installers by hand.
 
-```
-release/
-├── mac-arm64/ChatGPT Tabs.app        # runnable application
-└── ChatGPT Tabs-1.0.0-arm64.dmg      # drag-and-drop installer image
-```
+- `.github/workflows/ci.yml` runs lint, typecheck, unit and E2E tests on macOS and Windows for every push and pull request.
+- `.github/workflows/release.yml` builds and smoke-tests the packages on both systems and publishes them.
 
-(On an Intel Mac the folder is `mac-x64` and the file ends in `-x64.dmg`.)
+Steps for a maintainer:
 
-**Code signing:** there is no Apple Developer certificate, so the app is **ad-hoc signed** (`identity: "-"`). It opens without issues on the machine that built it. If you move the `.dmg` to another Mac, Gatekeeper shows an "unidentified developer" warning; right-click the app in Finder → **Open** once to approve it. For distribution, replace `mac.identity` in `electron-builder.yml` with a real Developer ID and add notarization.
+1. Bump `"version"` in `package.json` (e.g. `1.1.0`) and commit.
+2. Tag and push:
+   ```bash
+   git tag v1.1.0
+   git push origin main --tags
+   ```
+3. Wait for the **Release** workflow (Actions tab). It creates a **draft** release for the tag containing both `.dmg` files, the Windows installer, the portable `.zip` and `SHA256SUMS.txt`, with auto-generated release notes.
+4. Review the draft on the Releases page and click **Publish release**. The [Download](#download) link above always points to the newest published release.
+
+Running the Release workflow manually (Actions → Release → *Run workflow*) builds the same files as downloadable workflow artifacts without creating a release, which is handy for testing.
 
 ## First ChatGPT login
 
@@ -276,7 +353,8 @@ Signing in with a real ChatGPT account is intentionally not automated. Manual sm
 
 ## Known limitations
 
-- **No code signing / notarization.** The app is ad-hoc signed; on another Mac the first launch needs Gatekeeper approval.
+- **No code signing / notarization.** The Mac app is ad-hoc signed and not notarized; the Windows build is not Authenticode-signed. The first launch needs a one-time approval (Gatekeeper / SmartScreen), see [Download](#download).
+- **Windows** builds and tests run on GitHub's Windows runners (CI); the author's own manual testing was done on macOS.
 - **Cookies are stored unencrypted on disk** (`EnableCookieEncryption` off, the Electron default). Turning it on depends on the Keychain, and with unsigned/ad-hoc signed builds every new build triggers a Keychain permission prompt. If you sign with a real Developer ID, enabling it is recommended (the existing session is reset once when you do). The profile folder is only accessible to your user account; FileVault is recommended.
 - **Google/Microsoft/Apple sign-in** may occasionally restrict embedded browsers again. If that happens, use ChatGPT email + password sign-in or the "Log in" button inside a tab.
 - **Under automation** (`navigator.webdriver = true`) ChatGPT redirects signed-out users straight to Google sign-in, which is why the E2E tests use a stub page. This does not happen in normal use (verified in the package smoke test).
@@ -292,6 +370,8 @@ Signing in with a real ChatGPT account is intentionally not automated. Manual sm
 | Tab shows "ChatGPT could not be loaded" | Check your internet connection and press **Retry** |
 | "This tab stopped working" | Press **Reload tab** |
 | Tabs still look signed out after login | Reload the tab with `⌘R`; if that fails, Settings → Clear ChatGPT Session → sign in again |
+| macOS: "ChatGPT Tabs is damaged / cannot be opened" | The download is quarantined: `xattr -dr com.apple.quarantine "/Applications/ChatGPT Tabs.app"` |
+| Windows: "Windows protected your PC" | Unsigned build: **More info → Run anyway** (verify the SHA-256 first) |
 | The app does not open a second time | Single-instance lock: the existing window comes to the front |
-| Need verbose logs | `CHATGPT_TABS_DEBUG=1 "release/mac-arm64/ChatGPT Tabs.app/Contents/MacOS/ChatGPT Tabs"` (no sensitive data is logged) |
+| Need verbose logs | macOS: `CHATGPT_TABS_DEBUG=1 "/Applications/ChatGPT Tabs.app/Contents/MacOS/ChatGPT Tabs"`; Windows (PowerShell): `$env:CHATGPT_TABS_DEBUG=1; & "$env:LOCALAPPDATA\Programs\ChatGPT Tabs\ChatGPT Tabs.exe"` (no sensitive data is logged) |
 | Try a separate/clean profile | Launch with `CHATGPT_TABS_USER_DATA_DIR=/tmp/profile ...` |

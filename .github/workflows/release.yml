@@ -1,0 +1,76 @@
+name: Release
+
+# Builds macOS (.dmg, Apple Silicon + Intel) and Windows (installer + portable .zip) packages
+# and attaches them to a GitHub Release.
+#   - Push a tag like v1.2.0 -> a draft release named after the tag is created.
+#   - Or run manually from the Actions tab (workflow_dispatch) to only get build artifacts.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build (${{ matrix.name }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS
+            os: macos-latest
+            package: npx electron-builder --mac --arm64 --x64
+          - name: Windows
+            os: windows-latest
+            package: npx electron-builder --win --x64
+    runs-on: ${{ matrix.os }}
+    env:
+      # No certificates are configured: never try to discover a signing identity.
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run test:unit
+      - run: npm run test:e2e
+      - run: npm run build
+      - run: ${{ matrix.package }}
+      - name: Smoke test packaged app
+        run: npm run smoke:package
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packages-${{ matrix.name }}
+          if-no-files-found: error
+          path: |
+            release/*.dmg
+            release/*-setup.exe
+            release/*-portable.zip
+
+  release:
+    name: Publish GitHub Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: packages-*
+          path: dist
+          merge-multiple: true
+      - name: Generate SHA-256 checksums
+        working-directory: dist
+        run: sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt
+      - uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          generate_release_notes: true
+          files: dist/*

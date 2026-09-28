@@ -26,6 +26,15 @@ const child = spawn(platformBinary, [`--remote-debugging-port=${port}`], {
 })
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+async function eventually(predicate, timeoutMs = 10000) {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    if (await predicate()) return true
+    await sleep(200)
+  }
+  return false
+}
+
 const check = (condition, message) => {
   if (!condition) throw new Error(`FAILED: ${message}`)
   console.log(`ok - ${message}`)
@@ -69,18 +78,23 @@ try {
 
   await ui.locator('[data-testid=new-tab]').click()
   await ui.locator('[data-testid=tab]').nth(1).waitFor({ timeout: 10000 })
-  check((await ui.locator('[data-testid=tab]').count()) === 2, 'second tab opened')
+  check(await eventually(async () => (await ui.locator('[data-testid=tab]').count()) === 2), 'second tab opened')
 
   await ui.locator('[data-testid=tab]').first().click()
-  check((await ui.locator('[data-testid=tab]').first().getAttribute('data-active')) === 'true', 'switched back to first tab')
+  check(
+    await eventually(async () => (await ui.locator('[data-testid=tab]').first().getAttribute('data-active')) === 'true'),
+    'switched back to first tab'
+  )
 
   await ui.locator('[data-testid=tab]').nth(1).locator('[data-testid=tab-close]').click()
-  await sleep(300)
-  check((await ui.locator('[data-testid=tab]').count()) === 1, 'tab closed')
+  check(await eventually(async () => (await ui.locator('[data-testid=tab]').count()) === 1), 'tab closed')
 
   await ui.locator('[data-testid=settings-button]').click()
   await ui.locator('[data-testid=settings]').waitFor({ timeout: 5000 })
-  check((await ui.locator('[data-testid=about-partition]').textContent()) === 'persist:chatgpt', 'settings open, persistent partition persist:chatgpt')
+  check(
+    await eventually(async () => (await ui.locator('[data-testid=about-partition]').textContent()) === 'persist:chatgpt'),
+    'settings open, persistent partition persist:chatgpt'
+  )
 
   if (process.env.SMOKE_SCREENSHOT) {
     await ui.locator('[data-testid=settings-close]').click()
