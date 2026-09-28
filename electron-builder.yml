@@ -1,0 +1,38 @@
+appId: local.chatgpt-tabs.desktop
+productName: ChatGPT Tabs
+copyright: Copyright © 2026
+directories:
+  output: release
+  buildResources: build
+files:
+  - out/**/*
+  - package.json
+  - "!**/*.map"
+asar: true
+npmRebuild: false
+electronFuses:
+  runAsNode: false
+  enableNodeOptionsEnvironmentVariable: false
+  enableNodeCliInspectArguments: false
+  enableEmbeddedAsarIntegrityValidation: true
+  onlyLoadAppFromAsar: true
+  enableCookieEncryption: false
+mac:
+  category: public.app-category.productivity
+  target:
+    - target: dmg
+    - target: dir
+  identity: "-"
+  hardenedRuntime: false
+  extendInfo:
+    NSMicrophoneUsageDescription: ChatGPT voice conversations need access to the microphone.
+    NSCameraUsageDescription: ChatGPT video features need access to the camera.
+dmg:
+  artifactName: ${productName}-${version}-${arch}.${ext}
+  writeUpdateInfo: false
+win:
+  target: nsis
+linux:
+  target: AppImage
+  category: Utility
+publish: null
