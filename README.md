@@ -1,297 +1,297 @@
 # ChatGPT Tabs
 
-ChatGPT web uygulaması için **Chrome benzeri sekmeli** bir masaüstü istemcisi (Electron + TypeScript).
+A **Chrome-style tabbed** desktop client for the ChatGPT web app (Electron + TypeScript).
 
-- Her sekme ayrı bir `WebContentsView` (kendi renderer süreci, kendi navigation geçmişi, kendi sohbeti).
-- Bütün sekmeler **tek bir kalıcı oturumu** (`persist:chatgpt`) paylaşır: bir kez login olursunuz, tüm sekmeler ve sonraki açılışlar oturumu kullanır.
-- Genel amaçlı bir tarayıcı değildir: adres çubuğu, yer imi, geçmiş yöneticisi yoktur. ChatGPT dışındaki linkler sistem tarayıcısında açılır.
-- OpenAI API client'ı değildir; API key istemez. Mevcut ChatGPT web hesabınızı kullanır.
-- Telemetri, analytics, kendi sunucusu, auto-update **yoktur**.
+- Every tab is its own `WebContentsView` (own renderer process, own navigation history, own conversation).
+- All tabs share **one persistent session** (`persist:chatgpt`): sign in once and every tab, and every future launch, stays signed in.
+- Not a general-purpose browser: no address bar, bookmarks or history manager. Links outside ChatGPT open in the system browser.
+- Not an OpenAI API client; no API key needed. It uses your existing ChatGPT web account.
+- **No** telemetry, analytics, backend server or auto-update.
 
-> ChatGPT Tabs bağımsız bir sarmalayıcıdır; OpenAI ile bağlantılı değildir.
-
----
-
-## İçindekiler
-
-1. [Hızlı başlangıç](#hızlı-başlangıç)
-2. [Komutlar](#komutlar)
-3. [Paket çıktıları (.app / .dmg)](#paket-çıktıları-app--dmg)
-4. [İlk ChatGPT login](#i̇lk-chatgpt-login)
-5. [Oturumu temizleme](#oturumu-temizleme)
-6. [Klavye kısayolları](#klavye-kısayolları)
-7. [Güvenlik modeli](#güvenlik-modeli)
-8. [Gizlilik](#gizlilik)
-9. [Mimari](#mimari)
-10. [Testler](#testler)
-11. [Bilinen sınırlamalar](#bilinen-sınırlamalar)
-12. [Sorun giderme](#sorun-giderme)
+> ChatGPT Tabs is an independent wrapper and is not affiliated with OpenAI.
 
 ---
 
-## Hızlı başlangıç
+## Contents
 
-Gereksinim: Node.js 20+ (geliştirme Node 24 ile yapıldı). Electron **global kurulmaz**; `devDependency` olarak projeye gelir.
+1. [Quick start](#quick-start)
+2. [Scripts](#scripts)
+3. [Package output (.app / .dmg)](#package-output-app--dmg)
+4. [First ChatGPT login](#first-chatgpt-login)
+5. [Clearing the session](#clearing-the-session)
+6. [Keyboard shortcuts](#keyboard-shortcuts)
+7. [Security model](#security-model)
+8. [Privacy](#privacy)
+9. [Architecture](#architecture)
+10. [Tests](#tests)
+11. [Known limitations](#known-limitations)
+12. [Troubleshooting](#troubleshooting)
+
+---
+
+## Quick start
+
+Requirement: Node.js 20+ (developed with Node 24). Electron is **not** installed globally; it comes in as a project `devDependency`.
 
 ```bash
-npm install        # bağımlılıklar + Electron binary
-npm run dev        # geliştirme modu (HMR'li arayüz)
+npm install        # dependencies + Electron binary
+npm run dev        # development mode (UI with hot reload)
 ```
 
-Production paket:
+Production package:
 
 ```bash
-npm run package    # typecheck + build + macOS .app ve .dmg
+npm run package    # typecheck + build + macOS .app and .dmg
 open "release/mac-arm64/ChatGPT Tabs.app"
 ```
 
-## Komutlar
+## Scripts
 
-| Komut | Ne yapar |
+| Script | What it does |
 | --- | --- |
-| `npm run dev` | electron-vite dev server + Electron, arayüzde hot reload |
-| `npm start` | Derlenmiş `out/` klasörünü Electron ile çalıştırır (preview) |
+| `npm run dev` | electron-vite dev server + Electron, hot reload for the UI |
+| `npm start` | Runs the compiled `out/` folder with Electron (preview) |
 | `npm run build` | Typecheck + production build (`out/main`, `out/preload`, `out/renderer`) |
-| `npm run typecheck` | main/preload, renderer ve test kodları için `tsc --noEmit` |
+| `npm run typecheck` | `tsc --noEmit` for main/preload, renderer and test code |
 | `npm run lint` | ESLint (typescript-eslint + react-hooks) |
-| `npm test` | Unit testler (Vitest) + Electron E2E testleri (Playwright) |
-| `npm run test:unit` | Sadece unit testler |
-| `npm run test:e2e` | Build + Playwright ile gerçek Electron uygulaması testleri |
-| `npm run package` | macOS `.app` + `.dmg` (Apple Silicon'da arm64) |
-| `npm run package:win` / `package:linux` | Windows NSIS / Linux AppImage (ilgili OS'ta çalıştırın) |
-| `npm run smoke:package` | Paketlenmiş uygulamayı izole profille açıp otomatik smoke test yapar |
-| `npm run verify` | lint → typecheck → test → package → smoke:package (hepsi) |
+| `npm test` | Unit tests (Vitest) + Electron E2E tests (Playwright) |
+| `npm run test:unit` | Unit tests only |
+| `npm run test:e2e` | Build + Playwright tests against the real Electron app |
+| `npm run package` | macOS `.app` + `.dmg` (arm64 on Apple Silicon) |
+| `npm run package:win` / `package:linux` | Windows NSIS / Linux AppImage (run on that OS) |
+| `npm run smoke:package` | Launches the packaged app with an isolated profile and smoke-tests it automatically |
+| `npm run verify` | lint → typecheck → test → package → smoke:package (everything) |
 
-## Paket çıktıları (.app / .dmg)
+## Package output (.app / .dmg)
 
-`npm run package` sonrası:
+After `npm run package`:
 
 ```
 release/
-├── mac-arm64/ChatGPT Tabs.app        # doğrudan çalıştırılabilir uygulama
-└── ChatGPT Tabs-1.0.0-arm64.dmg      # sürükle-bırak kurulum imajı
+├── mac-arm64/ChatGPT Tabs.app        # runnable application
+└── ChatGPT Tabs-1.0.0-arm64.dmg      # drag-and-drop installer image
 ```
 
-(Intel Mac'te klasör `mac-x64` / dosya `-x64.dmg` olur.)
+(On an Intel Mac the folder is `mac-x64` and the file ends in `-x64.dmg`.)
 
-**İmzalama:** Apple Developer sertifikası olmadığından uygulama **ad-hoc imzalıdır** (`identity: "-"`). Kendi makinenizde derlediğinizde sorunsuz açılır. `.dmg`'yi başka bir Mac'e taşırsanız Gatekeeper "tanımlanamayan geliştirici" uyarısı verir; Finder'da sağ tık → **Aç** ile bir kez onaylayın. Dağıtım yapılacaksa `electron-builder.yml` içinde `mac.identity` gerçek bir Developer ID ile değiştirilip notarization eklenmelidir.
+**Code signing:** there is no Apple Developer certificate, so the app is **ad-hoc signed** (`identity: "-"`). It opens without issues on the machine that built it. If you move the `.dmg` to another Mac, Gatekeeper shows an "unidentified developer" warning; right-click the app in Finder → **Open** once to approve it. For distribution, replace `mac.identity` in `electron-builder.yml` with a real Developer ID and add notarization.
 
-## İlk ChatGPT login
+## First ChatGPT login
 
-1. Uygulamayı açın. Otomatik olarak bir ChatGPT sekmesi açılır.
-2. Sağ üstteki **⚙ Settings** butonuna (veya `⌘,` / `Ctrl+,`) basın.
-3. **Open ChatGPT Login**'e tıklayın. Aynı kalıcı oturumu kullanan ayrı bir giriş penceresi açılır.
-4. E-posta/şifre, Google, Microsoft veya Apple ile **normal şekilde, elle** giriş yapın (MFA dahil). Kurumsal SSO akışları da pencere içinde çalışır.
-5. Giriş algılandığında pencere kendiliğinden kapanır ve açık sekmeler yenilenir. Pencereyi elle kapatırsanız da sekmeler yenilenir.
-6. Settings'te durum **Signed in** olarak görünür.
+1. Open the app. A ChatGPT tab opens automatically.
+2. Click the **⚙ Settings** button at the top right (or press `⌘,` / `Ctrl+,`).
+3. Click **Open ChatGPT Login**. A separate sign-in window opens that uses the same persistent session.
+4. Sign in **manually, as usual** with email/password, Google, Microsoft or Apple (MFA included). Enterprise SSO flows also work inside the window.
+5. Once the sign-in is detected, the window closes itself and the open tabs reload. If you close the window yourself, the tabs reload as well.
+6. Settings now shows **Signed in**.
 
-Alternatif: Herhangi bir sekmedeki ChatGPT **Log in** butonu da aynı oturuma giriş yapar.
+Alternative: the **Log in** button inside any ChatGPT tab signs in to the same session.
 
-Uygulamayı kapatıp açtığınızda, ChatGPT oturum çerezinin süresi dolmadığı sürece tekrar login istenmez. Oturum, uygulama sürümü değişse de korunur çünkü partition adı sabittir (`persist:chatgpt`) ve kullanıcı verisi dizini uygulama adına bağlıdır.
+After quitting and reopening the app you are not asked to sign in again as long as the ChatGPT session cookie has not expired. The session also survives app updates, because the partition name is fixed (`persist:chatgpt`) and the user data directory is tied to the app name.
 
-Oturum verisinin diskteki yeri:
+Where the session data lives on disk:
 
-| OS | Konum |
+| OS | Location |
 | --- | --- |
 | macOS | `~/Library/Application Support/ChatGPT Tabs/Partitions/chatgpt/` |
 | Windows | `%APPDATA%\ChatGPT Tabs\Partitions\chatgpt\` |
 | Linux | `~/.config/ChatGPT Tabs/Partitions/chatgpt/` |
 
-## Oturumu temizleme
+## Clearing the session
 
-Settings → **Clear ChatGPT Session** → onay penceresinde **Clear Session**.
+Settings → **Clear ChatGPT Session** → **Clear Session** in the confirmation dialog.
 
-Bu işlem ChatGPT partition'ındaki **tüm çerezleri, cache'i, localStorage/IndexedDB/service worker verilerini ve HTTP auth cache'ini** siler, çerez deposunu diske flush eder, açık login penceresini kapatır ve bütün sekmeleri ChatGPT başlangıç sayfasına döndürür. Sonuç: tüm sekmelerde çıkış yapılmış durum. Sohbetleriniz ChatGPT hesabınızda durur; sadece bu bilgisayardaki yerel veri silinir.
+This deletes **all cookies, cache, localStorage/IndexedDB/service worker data and the HTTP auth cache** of the ChatGPT partition, flushes the cookie store to disk, closes an open login window and sends every tab back to the ChatGPT start page. Result: signed out in all tabs. Your conversations stay in your ChatGPT account; only local data on this computer is removed.
 
-## Klavye kısayolları
+## Keyboard shortcuts
 
-| İşlem | macOS | Windows / Linux |
+| Action | macOS | Windows / Linux |
 | --- | --- | --- |
-| Yeni sekme | `⌘T` | `Ctrl+T` |
-| Aktif sekmeyi kapat | `⌘W` | `Ctrl+W` |
-| Aktif sekmeyi yenile | `⌘R` | `Ctrl+R` |
-| Cache'siz yenile | `⌘⇧R` | `Ctrl+Shift+R` |
-| 1.–8. sekmeye geç | `⌘1` … `⌘8` | `Ctrl+1` … `Ctrl+8` |
-| Son sekmeye geç | `⌘9` | `Ctrl+9` |
-| Sonraki / önceki sekme | `Ctrl+Tab` / `Ctrl+⇧Tab` | `Ctrl+Tab` / `Ctrl+Shift+Tab` |
-| Geri / ileri | `⌘[` / `⌘]` | `Alt+←` / `Alt+→` |
+| New tab | `⌘T` | `Ctrl+T` |
+| Close active tab | `⌘W` | `Ctrl+W` |
+| Reload active tab | `⌘R` | `Ctrl+R` |
+| Reload without cache | `⌘⇧R` | `Ctrl+Shift+R` |
+| Go to tab 1–8 | `⌘1` … `⌘8` | `Ctrl+1` … `Ctrl+8` |
+| Go to last tab | `⌘9` | `Ctrl+9` |
+| Next / previous tab | `Ctrl+Tab` / `Ctrl+⇧Tab` | `Ctrl+Tab` / `Ctrl+Shift+Tab` |
+| Back / forward | `⌘[` / `⌘]` | `Alt+←` / `Alt+→` |
 | Settings | `⌘,` | `Ctrl+,` |
 | Zoom | `⌘+` / `⌘-` / `⌘0` | `Ctrl++` / `Ctrl+-` / `Ctrl+0` |
-| Sekme için DevTools | `⌥⌘I` | `Ctrl+Shift+I` |
+| DevTools for tab | `⌥⌘I` | `Ctrl+Shift+I` |
 
-Kısayollar uygulama menüsünün accelerator'larıdır; odak tab bar'da da olsa ChatGPT sayfasında da olsa çalışır. Sekmeye orta tıklama sekmeyi kapatır. Son sekme kapatılırsa uygulama kapanmaz, yeni temiz bir sekme açılır.
+Shortcuts are application-menu accelerators, so they work whether focus is in the tab bar or on the ChatGPT page. Middle-clicking a tab closes it. Closing the last tab does not quit the app; a fresh tab opens instead.
 
 ---
 
-## Güvenlik modeli
+## Security model
 
-Temel varsayım: **uzak ChatGPT içeriği güvenilmezdir**, uygulamanın kendi yerel arayüzü (tab bar/settings) güvenilirdir. İkisi arasında net bir güven sınırı vardır.
+Core assumption: **remote ChatGPT content is untrusted**, the app's own local UI (tab bar/settings) is trusted. There is a clear trust boundary between the two.
 
-### Süreç ve izolasyon ayarları
+### Process and isolation settings
 
-| Bileşen | `sandbox` | `contextIsolation` | `nodeIntegration` | Preload |
+| Component | `sandbox` | `contextIsolation` | `nodeIntegration` | Preload |
 | --- | --- | --- | --- | --- |
-| ChatGPT sekmeleri (`WebContentsView`) | ✅ true | ✅ true | ❌ false | **yok** |
-| Login penceresi | ✅ true | ✅ true | ❌ false | **yok** |
-| OAuth popup'ları | ✅ true | ✅ true | ❌ false | **yok** |
-| Yerel arayüz (tab bar) | ✅ true | ✅ true | ❌ false | minimal, tipli köprü |
+| ChatGPT tabs (`WebContentsView`) | ✅ true | ✅ true | ❌ false | **none** |
+| Login window | ✅ true | ✅ true | ❌ false | **none** |
+| OAuth popups | ✅ true | ✅ true | ❌ false | **none** |
+| Local UI (tab bar) | ✅ true | ✅ true | ❌ false | minimal, typed bridge |
 
-Ek olarak tüm uzak içeriklerde: `webSecurity: true`, `allowRunningInsecureContent: false`, `webviewTag: false`, `nodeIntegrationInSubFrames: false`, `safeDialogs: true`. Global `will-attach-webview` engeli ile hiçbir yerde `<webview>` oluşturulamaz. `enableRemoteModule` / `@electron/remote` kullanılmaz. Bu ayarlar E2E testlerinde gerçek `WebContents` üzerinden doğrulanır (sekme sayfasında `require`, `process` ve köprü nesnesinin **tanımsız** olduğu dahil).
+In addition, all remote content uses `webSecurity: true`, `allowRunningInsecureContent: false`, `webviewTag: false`, `nodeIntegrationInSubFrames: false`, `safeDialogs: true`. A global `will-attach-webview` block means no `<webview>` can be created anywhere. `enableRemoteModule` / `@electron/remote` are not used. These settings are verified in the E2E tests against the real `WebContents` (including that `require`, `process` and the bridge object are **undefined** in a tab page).
 
-### IPC yüzeyi
+### IPC surface
 
-- ChatGPT sayfalarının **hiç preload'u yoktur**, dolayısıyla IPC'ye erişemezler.
-- Yerel arayüze `contextBridge` ile sadece sabit fonksiyonlar açılır (`createTab`, `closeTab`, `openLogin`, `clearSession` …). Genel amaçlı `invoke`/`send`, dosya sistemi, shell veya komut çalıştırma **yoktur**.
-- Main süreçte her handler çağrıyı yapanı doğrular: gönderen, ana pencerenin `webContents`'i **ve** onun main frame'i olmalı **ve** frame URL'si uygulamanın kendi arayüzü olmalı (paketli `file://…/renderer/index.html` veya dev server). Aksi halde çağrı reddedilir.
-- Parametreler doğrulanır (ör. sekme id'si yalnızca `^tab-[1-9][0-9]{0,8}$`). Test: `activateTab('../../etc')` reddedilir.
+- ChatGPT pages have **no preload at all**, so they cannot reach IPC.
+- The local UI gets only fixed functions through `contextBridge` (`createTab`, `closeTab`, `openLogin`, `clearSession`, …). There is **no** generic `invoke`/`send`, file system, shell or command execution.
+- Every handler in the main process validates the caller: the sender must be the main window's `webContents` **and** its main frame **and** the frame URL must be the app's own UI (packaged `file://…/renderer/index.html` or the dev server). Anything else is rejected.
+- Arguments are validated (e.g. a tab id must match `^tab-[1-9][0-9]{0,8}$`). Tested: `activateTab('../../etc')` is rejected.
 
-### Navigation politikası (`src/main/security/navigationPolicy.ts`)
+### Navigation policy (`src/main/security/navigationPolicy.ts`)
 
-Saf (Electron'suz) ve unit-test edilmiş bir fonksiyondur:
+A pure (Electron-free), unit-tested function:
 
-| Hedef | Davranış |
+| Target | Behaviour |
 | --- | --- |
-| `https://chatgpt.com`, alt alan adları, `chat.openai.com` | Uygulama içinde kalır |
-| Giriş sağlayıcıları: `auth.openai.com`, `auth0.openai.com`, `accounts.google.com`, `login.microsoftonline.com`, `login.live.com`, `appleid.apple.com`, Cloudflare challenge, `pay.openai.com` / Stripe checkout | Uygulama içinde kalır (login/upgrade akışları bozulmasın) |
-| Sayfa zaten bir giriş sağlayıcısındayken herhangi bir `https` hedefi | İzinli (kurumsal SSO: Okta, Entra ID vb.) |
-| Diğer `http(s)` ve `mailto:` | `shell.openExternal` ile **sistem tarayıcısında** açılır, uygulama içinde açılmaz |
-| `file:`, `javascript:`, `chrome:`, özel şemalar, bozuk URL'ler | **Engellenir** |
+| `https://chatgpt.com`, its subdomains, `chat.openai.com` | Stays in the app |
+| Sign-in providers: `auth.openai.com`, `auth0.openai.com`, `accounts.google.com`, `login.microsoftonline.com`, `login.live.com`, `appleid.apple.com`, Cloudflare challenge, `pay.openai.com` / Stripe checkout | Stays in the app (so login/upgrade flows keep working) |
+| Any `https` target while the page is already on a sign-in provider | Allowed (enterprise SSO: Okta, Entra ID, etc.) |
+| Other `http(s)` and `mailto:` | Opened in the **system browser** via `shell.openExternal`, never inside the app |
+| `file:`, `javascript:`, `chrome:`, custom schemes, malformed URLs | **Blocked** |
 
-- `shell.openExternal`'a yalnızca `http`, `https`, `mailto` geçer; başka şema asla işletim sistemine iletilmez.
-- `will-navigate` ve main-frame `will-redirect` ikisi de denetlenir (script ile yapılan `location.href` yönlendirmeleri dahil).
-- `window.open` / `target=_blank`: ChatGPT linki → yeni uygulama sekmesi; OAuth → aynı oturumu miras alan sandbox'lı popup; harici link → sistem tarayıcısı; diğerleri → reddedilir.
-- Harici bir sayfa için açılmış boş popup, link sistem tarayıcısına verildikten sonra kapatılır.
-- iframe'lere (Cloudflare Turnstile, ödeme widget'ları) müdahale edilmez; allowlist bilerek ChatGPT'nin API/CDN isteklerini bloklamaz.
+- Only `http`, `https` and `mailto` are ever passed to `shell.openExternal`; no other scheme reaches the operating system.
+- Both `will-navigate` and main-frame `will-redirect` are checked (including script-driven `location.href` changes).
+- `window.open` / `target=_blank`: ChatGPT link → new app tab; OAuth → sandboxed popup that inherits the same session; external link → system browser; anything else → denied.
+- A blank popup opened for an external page is closed after the link is handed to the system browser.
+- Iframes (Cloudflare Turnstile, payment widgets) are left alone; the allowlist deliberately does not block ChatGPT's API/CDN requests.
 
-### İzinler
+### Permissions
 
-- ChatGPT partition'ında sadece **chatgpt.com kökenine** ve sadece şu izinler verilir: `media` (sesli sohbet için mikrofon/kamera), `clipboard-read`, `clipboard-sanitized-write`, `fullscreen`, `notifications`. Diğer tüm izin istekleri ve diğer kökenler reddedilir.
-- Yerel arayüzün kullandığı varsayılan oturum **hiçbir izin** alamaz.
-- macOS mikrofon/kamera erişimi için `Info.plist` açıklamaları eklidir; sistem izni ilk kullanımda sorulur.
+- In the ChatGPT partition, only the **chatgpt.com origin** gets permissions, and only these: `media` (microphone/camera for voice chat), `clipboard-read`, `clipboard-sanitized-write`, `fullscreen`, `notifications`. Every other permission request and every other origin is denied.
+- The default session used by the local UI gets **no permissions at all**.
+- `Info.plist` usage descriptions are included for macOS microphone/camera access; the system asks on first use.
 
-### Kimlik bilgileri ve çerezler
+### Credentials and cookies
 
-- Uygulama şifre, MFA kodu, token veya çerez değeri **okumaz, saklamaz, loglamaz**. Giriş gerçek web sayfalarına elle yapılır; autofill/password capture yoktur.
-- Oturum, Electron'un kendi çerez/depolama mekanizmasında (`persist:chatgpt`) durur. Uygulamanın ayrı bir config dosyası veya veritabanı yoktur.
-- "Signed in" durumu için yalnızca oturum çerezinin **var olup olmadığına** bakılır; değer asla okunmaz.
-- Loglarda URL'ler `redactUrl` ile sadece `origin + path`'e indirgenir (OAuth `code`, `state`, token gibi query parametreleri ve `user:pass@` kısmı atılır). Production'da debug/info logları kapalıdır; sadece uyarı/hata yazılır.
-- Kapanışta çerez deposu diske flush edilir, böylece login yeniden başlatmadan sonra da korunur.
+- The app **never reads, stores or logs** passwords, MFA codes, tokens or cookie values. Sign-in happens manually on the real web pages; there is no autofill or password capture.
+- The session lives in Electron's own cookie/storage mechanism (`persist:chatgpt`). The app has no separate config file or database.
+- For the "Signed in" status the app only checks **whether** the session cookie exists; its value is never read.
+- URLs in logs are reduced to `origin + path` by `redactUrl` (query parameters such as OAuth `code`, `state` or tokens, and any `user:pass@` part, are dropped). Debug/info logs are off in production; only warnings/errors are written.
+- The cookie store is flushed to disk on quit, so the login survives restarts.
 
 ### User-Agent
 
-Electron varsayılan User-Agent'ına `Electron/x.y` ve uygulama adı token'larını ekler; Google gibi sağlayıcılar bu nedenle girişi "güvenli olmayan tarayıcı" diye reddeder. Uygulama bu **iki token'ı çıkarır**, kalan UA gömülü Chromium'un gerçek Chrome UA'sıdır. Başka hiçbir kimlik taklidi yapılmaz, hiçbir güvenlik mekanizması (CAPTCHA, Cloudflare, MFA) atlatılmaya çalışılmaz.
+Electron appends `Electron/x.y` and app-name tokens to its default User-Agent, which makes providers like Google reject the sign-in as an "insecure browser". The app **removes these two tokens**; what remains is the real Chrome UA of the bundled Chromium. No other identity is spoofed, and no security mechanism (CAPTCHA, Cloudflare, MFA) is bypassed.
 
-### Paket sertleştirme (Electron Fuses)
+### Package hardening (Electron Fuses)
 
 `electron-builder.yml` → `electronFuses`:
 
-| Fuse | Değer | Anlamı |
+| Fuse | Value | Meaning |
 | --- | --- | --- |
-| `RunAsNode` | kapalı | `ELECTRON_RUN_AS_NODE` ile uygulama binary'si Node olarak kullanılamaz |
-| `EnableNodeOptionsEnvironmentVariable` | kapalı | `NODE_OPTIONS` ile kod enjekte edilemez |
-| `EnableNodeCliInspectArguments` | kapalı | `--inspect` ile main sürece debugger bağlanamaz |
-| `EnableEmbeddedAsarIntegrityValidation` | açık | `app.asar` değiştirilirse uygulama açılmaz |
-| `OnlyLoadAppFromAsar` | açık | Kod sadece bütünlüğü doğrulanan `app.asar`'dan yüklenir |
-| `EnableCookieEncryption` | kapalı | Bkz. [sınırlamalar](#bilinen-sınırlamalar) |
+| `RunAsNode` | off | The app binary cannot be used as Node via `ELECTRON_RUN_AS_NODE` |
+| `EnableNodeOptionsEnvironmentVariable` | off | No code injection through `NODE_OPTIONS` |
+| `EnableNodeCliInspectArguments` | off | No debugger attach to the main process via `--inspect` |
+| `EnableEmbeddedAsarIntegrityValidation` | on | The app refuses to start if `app.asar` was modified |
+| `OnlyLoadAppFromAsar` | on | Code is only loaded from the integrity-checked `app.asar` |
+| `EnableCookieEncryption` | off | See [limitations](#known-limitations) |
 
-Diğer önlemler: tek instance kilidi (aynı profil iki süreç tarafından açılamaz), yerel arayüzde katı CSP (`script-src 'self'`, `object-src 'none'`, `frame-src 'none'`, `form-action 'none'`), yerel arayüz asla navigate etmez / pencere açmaz (tab bar'a bırakılan dosya arayüzü değiştiremez), OAuth popup'ları da sandbox'lı.
-
----
-
-## Gizlilik
-
-- Uygulamanın kendi ağ trafiği **yoktur**: telemetri, analytics, crash raporlama, update kontrolü yok.
-- Tek ağ trafiği, sekmelerdeki ChatGPT sayfasının ve sizin seçtiğiniz giriş sağlayıcısının kendi trafiğidir.
-- Sohbet içeriği hiçbir üçüncü tarafa gönderilmez, uygulama tarafından okunmaz.
-- ChatGPT DOM'una hiçbir script enjekte edilmez; sayfa HTML/CSS'ine dokunulmaz.
+Other measures: single-instance lock (one profile cannot be opened by two processes), strict CSP on the local UI (`script-src 'self'`, `object-src 'none'`, `frame-src 'none'`, `form-action 'none'`), the local UI never navigates or opens windows (a file dropped on the tab bar cannot replace the UI), and OAuth popups are sandboxed too.
 
 ---
 
-## Mimari
+## Privacy
+
+- The app has **no network traffic of its own**: no telemetry, analytics, crash reporting or update checks.
+- The only network traffic is that of the ChatGPT page in your tabs and of the sign-in provider you choose.
+- Conversation content is never sent to any third party and is not read by the app.
+- No script is injected into the ChatGPT DOM; the page's HTML/CSS is not touched.
+
+---
+
+## Architecture
 
 ```
 src/
-├── shared/                   # main/preload/renderer ortak: sabitler, IPC kanal/tip tanımları, doğrulama
+├── shared/                   # shared by main/preload/renderer: constants, IPC channels/types, validation
 ├── main/
-│   ├── index.ts              # app lifecycle: single-instance, ready, activate (dock), before-quit flush
-│   ├── AppController.ts      # pencere + TabManager + LoginWindow + settings durumu; state'i UI'a yayınlar
-│   ├── menu.ts               # uygulama menüsü = klavye kısayolları
-│   ├── logger.ts             # sadece dev'de ayrıntılı log, hassas veri yok
+│   ├── index.ts              # app lifecycle: single instance, ready, activate (dock), flush on before-quit
+│   ├── AppController.ts      # window + TabManager + LoginWindow + settings state; publishes state to the UI
+│   ├── menu.ts               # application menu = keyboard shortcuts
+│   ├── logger.ts             # verbose logs in dev only, never sensitive data
 │   ├── tabs/
 │   │   ├── TabManager.ts     # createTab/activateTab/closeTab/reloadTab/getActiveTab/listTabs/updateTabTitle/destroyAllTabs
-│   │   ├── tabOrder.ts       # saf yardımcılar (kapanınca hangi sekme, ⌘1-9, Ctrl+Tab)
-│   │   └── contextMenu.ts    # native sağ tık menüsü (kopyala/yapıştır, link, resim, yazım denetimi)
+│   │   ├── tabOrder.ts       # pure helpers (which tab after close, ⌘1-9, Ctrl+Tab)
+│   │   └── contextMenu.ts    # native right-click menu (copy/paste, links, images, spell check)
 │   ├── session/
-│   │   ├── chatgptSession.ts # persist:chatgpt: izinler, indirmeler, UA, signed-in kontrolü, temizleme, flush
+│   │   ├── chatgptSession.ts # persist:chatgpt: permissions, downloads, UA, signed-in check, clearing, flush
 │   │   └── userAgent.ts
-│   ├── auth/LoginWindow.ts   # aynı partition'lı giriş penceresi ve yaşam döngüsü
+│   ├── auth/LoginWindow.ts   # sign-in window on the same partition, and its lifecycle
 │   ├── security/
-│   │   ├── navigationPolicy.ts   # saf karar fonksiyonları (unit-test'li)
-│   │   ├── webContentsPolicy.ts  # politikayı will-navigate/will-redirect/window.open'a bağlar
-│   │   └── externalLinks.ts      # güvenli shell.openExternal
-│   ├── ipc/registerIpc.ts    # gönderen + parametre doğrulamalı IPC handler'ları
-│   └── window/               # ana pencere, layout (view bounds), tema renkleri
-├── preload/index.ts          # sadece yerel arayüz için minimal contextBridge API
-└── renderer/                 # React arayüz: TabBar, Settings, hata/crash paneli
+│   │   ├── navigationPolicy.ts   # pure decision functions (unit-tested)
+│   │   ├── webContentsPolicy.ts  # wires the policy into will-navigate/will-redirect/window.open
+│   │   └── externalLinks.ts      # safe shell.openExternal
+│   ├── ipc/registerIpc.ts    # IPC handlers with sender + argument validation
+│   └── window/               # main window, layout (view bounds), theme colours
+├── preload/index.ts          # minimal contextBridge API for the local UI only
+└── renderer/                 # React UI: TabBar, Settings, error/crash panel
 ```
 
-**Sekme yaşam döngüsü.** Her sekme `persist:chatgpt` partition'lı yeni bir `WebContentsView` ile oluşturulur ve `https://chatgpt.com/` açar (aktif sekmenin URL'si kopyalanmaz). Pencereye **yalnızca aktif sekmenin view'i** eklenir; pasif view'ler detach edilir ama **yok edilmez**, böylece sohbet (akan yanıtlar dahil) kaldığı yerden devam eder. Sekme kapanınca view pencereden çıkarılır ve `webContents.close()` ile açıkça yok edilir (WebContentsView bunu garbage collection'da yapmaz). Pencere kapanınca / uygulama çıkarken `destroyAllTabs()` tüm web içeriklerini kapatır. macOS'ta dock ikonuna tıklanınca yeni pencere + temiz sekme açılır.
+**Tab lifecycle.** Each tab is created as a new `WebContentsView` on the `persist:chatgpt` partition and opens `https://chatgpt.com/` (the active tab's URL is not cloned). **Only the active tab's view** is attached to the window; inactive views are detached but **not destroyed**, so conversations (including streaming answers) continue where they left off. Closing a tab removes its view from the window and destroys it explicitly with `webContents.close()` (WebContentsView does not do this on garbage collection). When the window closes or the app quits, `destroyAllTabs()` closes every web contents. On macOS, clicking the dock icon opens a new window with a fresh tab.
 
-**Layout.** View konumu tek bir saf fonksiyondan (`computeTabViewBounds`) hesaplanır: tab bar yüksekliği (40 DIP) altındaki tüm alan. `resize`, `maximize`, `restore`, fullscreen olaylarında yeniden hesaplanır. Değerler DIP cinsindendir; Retina/HiDPI dönüşümünü Electron yapar. macOS'ta `hiddenInset` başlık çubuğu kullanılır, traffic light'lar için tab bar solunda boşluk bırakılır (fullscreen'de kaldırılır). Windows/Linux'ta `titleBarOverlay` ile native pencere butonları korunur.
+**Layout.** The view position comes from a single pure function (`computeTabViewBounds`): the whole area below the tab bar (40 DIP). It is recomputed on `resize`, `maximize`, `restore` and fullscreen events. Values are in DIPs; Electron handles the Retina/HiDPI conversion. macOS uses the `hiddenInset` title bar with space reserved on the left of the tab bar for the traffic lights (removed in fullscreen). On Windows/Linux, `titleBarOverlay` keeps the native window buttons.
 
-**Settings ve hata ekranları** yerel arayüzde çizilir; bunlar görünürken aktif ChatGPT view'i detach edilir (native view'ler HTML'in üstünde durduğundan overlay yerine bu yaklaşım kullanılır).
+**Settings and error screens** are drawn by the local UI; while they are visible the active ChatGPT view is detached (native views sit above the HTML, so this is used instead of an overlay).
 
-**Hata yönetimi.** Main-frame `did-fail-load` (iptal edilen `-3` hariç) → sekme `error` durumuna geçer, "ChatGPT could not be loaded" + **Retry**. `render-process-gone` → "This tab stopped working" + **Reload tab**. Yerel arayüzün renderer'ı çökerse otomatik yeniden yüklenir. Sekme başlıkları polling ile değil `page-title-updated` olayıyla güncellenir.
+**Error handling.** Main-frame `did-fail-load` (except the aborted `-3`) → tab goes to the `error` state, "ChatGPT could not be loaded" + **Retry**. `render-process-gone` → "This tab stopped working" + **Reload tab**. If the local UI's renderer crashes it reloads automatically. Tab titles update from the `page-title-updated` event, not by polling.
 
-**İndirmeler.** Electron'un yerel indirme mekanizması korunur: kaydetme penceresi `~/Downloads/<dosya adı>` önerisiyle açılır; macOS'ta tamamlanınca Downloads yığını dock'ta zıplar. Dosya yükleme (native file picker), sürükle-bırak ve kopyala/yapıştır ChatGPT'nin kendi mekanizmalarıyla, müdahalesiz çalışır.
+**Downloads.** Electron's native download handling is kept: the save dialog suggests `~/Downloads/<file name>`; on macOS the Downloads stack bounces in the dock when finished. File upload (native file picker), drag and drop and copy/paste work through ChatGPT's own mechanisms, untouched.
 
-**Teknolojiler.** Electron 44 (`WebContentsView`, BrowserView kullanılmaz), TypeScript 6, electron-vite 5 / Vite 7, React 19, electron-builder 26, Vitest 5, Playwright 1.63, ESLint 10.
+**Stack.** Electron 44 (`WebContentsView`, no BrowserView), TypeScript 6, electron-vite 5 / Vite 7, React 19, electron-builder 26, Vitest 5, Playwright 1.63, ESLint 10.
 
 ---
 
-## Testler
+## Tests
 
 ```bash
-npm run test:unit    # 21 test: navigation politikası, URL redaksiyonu, UA, layout, sekme sırası, id doğrulama
-npm run test:e2e     # 16 test: gerçek Electron uygulaması üzerinde
+npm run test:unit    # 21 tests: navigation policy, URL redaction, UA, layout, tab order, id validation
+npm run test:e2e     # 16 tests against the real Electron app
 npm run smoke:package
 ```
 
-E2E testleri gerçek ChatGPT hesabı veya ağ gerektirmez: her test izole geçici bir profil dizini kullanır (`CHATGPT_TABS_USER_DATA_DIR`), `chatgpt.com` istekleri test içinde yerel bir stub sayfaya yönlendirilir, `shell.openExternal` kaydediciyle değiştirilir. Kapsam:
+The E2E tests need no real ChatGPT account or network: each test uses an isolated temporary profile directory (`CHATGPT_TABS_USER_DATA_DIR`), `chatgpt.com` requests are routed to a local stub page inside the test, and `shell.openExternal` is replaced by a recorder. Coverage:
 
-- açılışta tek sekme + doğru view bounds; her sekme ayrı `WebContents`, hepsi aynı kalıcı `persist:chatgpt` session'ı; sandbox/contextIsolation/nodeIntegration/preload doğrulaması
-- yeni sekmenin temiz başlaması, sekmeler arası geçişte navigation durumunun korunması, geri/ileri
-- menü kısayolları (yeni/kapat/⌘1-9/Ctrl+Tab) ve accelerator değerleri
-- sekme kapatınca `WebContents`'in yok edilmesi, son sekme kapanınca yeni sekme
-- reload (buton + menü), settings ekranı, login penceresi (aynı session, giriş algılama, kapanış, sekme yenileme)
-- oturum temizleme (çerez + localStorage silinir), harici link/`target=_blank`/script yönlendirmesi → sistem tarayıcısı, `file:` engeli, ChatGPT popup'ı → yeni sekme
-- pencere boyutlandırmada bounds, yükleme hatası + Retry, renderer crash + kurtarma, geçersiz IPC reddi
-- pencere kapanınca tüm sekme `WebContents`'lerinin temizlenmesi + dock ile yeniden açılış, çerezlerin uygulama yeniden başlatıldığında korunması
+- one tab on launch with correct view bounds; separate `WebContents` per tab, all on the same persistent `persist:chatgpt` session; sandbox/contextIsolation/nodeIntegration/preload checks
+- new tabs start clean, navigation state is preserved when switching tabs, back/forward
+- menu shortcuts (new/close/⌘1-9/Ctrl+Tab) and accelerator values
+- closing a tab destroys its `WebContents`; closing the last tab opens a new one
+- reload (button + menu), settings screen, login window (same session, sign-in detection, closing, tab reload)
+- clearing the session (cookies + localStorage removed); external link / `target=_blank` / script redirect → system browser; `file:` blocked; ChatGPT popup → new tab
+- bounds on window resize, load failure + Retry, renderer crash + recovery, invalid IPC rejected
+- closing the window cleans up every tab `WebContents` + reopening from the dock; cookies survive an app restart
 
-`smoke:package` paketlenmiş `.app`'i izole profille başlatır, CDP üzerinden bağlanır ve arayüzün `app.asar`'dan yüklendiğini, gerçek `https://chatgpt.com`'un açıldığını, sekme açma/geçme/kapama ve Settings'i doğrular.
+`smoke:package` launches the packaged `.app` with an isolated profile, connects over CDP and verifies that the UI loads from `app.asar`, real `https://chatgpt.com` opens, tabs can be opened/switched/closed, and Settings works.
 
-Gerçek ChatGPT hesabıyla login testi otomatikleştirilmemiştir (bilerek); manuel smoke test: uygulamayı açın → Settings → Open ChatGPT Login → giriş yapın → uygulamayı kapatıp açın → hâlâ girişli olmalısınız.
+Signing in with a real ChatGPT account is intentionally not automated. Manual smoke test: open the app → Settings → Open ChatGPT Login → sign in → quit and reopen the app → you should still be signed in.
 
 ---
 
-## Bilinen sınırlamalar
+## Known limitations
 
-- **Kod imzası / notarization yok.** Uygulama ad-hoc imzalıdır; başka bir Mac'te ilk açılışta Gatekeeper onayı gerekir.
-- **Çerezler diskte şifrelenmeden durur** (`EnableCookieEncryption` kapalı, Electron varsayılanı). Açılması Keychain'e bağlı ve imzasız/ad-hoc imzalı yapılarda her yeni build'de Keychain izin penceresi çıkarır; gerçek bir Developer ID ile imzalanıyorsa açılması önerilir (açıldığında mevcut oturum bir kez sıfırlanır). Profil klasörü yalnızca sizin kullanıcı hesabınızın erişimindedir; FileVault önerilir.
-- **Google/Microsoft/Apple girişi** gömülü tarayıcıları zaman zaman yeniden kısıtlayabilir. Böyle bir durumda e-posta + şifre ile ChatGPT girişi veya sekme içindeki "Log in" butonu kullanılabilir.
-- **Otomasyon altında** (`navigator.webdriver = true`) ChatGPT çıkış yapılmış kullanıcıyı doğrudan Google girişine yönlendiriyor; bu yüzden E2E testleri stub sayfa kullanır. Normal kullanımda bu olmaz (paket smoke testinde doğrulandı).
-- **Pasif sekmeler** Chromium'un arka plan throttling'ine tabidir: akan yanıt devam eder ama ekrana çizimi sekmeye dönünce güncellenir. Her sekme ayrı renderer süreci olduğundan sekme sayısıyla bellek kullanımı artar; güvenlik için en fazla 50 sekme açılabilir.
-- **Açık sekmeler yeniden başlatmada geri yüklenmez**; her açılış tek temiz sekmeyle başlar (sohbetler ChatGPT'nin sol menüsünden açılabilir).
-- **Auto-update yoktur**; yeni sürüm için yeniden `npm run package`.
-- `blob:` URL'leri (ChatGPT'nin "yeni pencerede aç" dediği bazı önizlemeler) sandbox'lı küçük bir pencerede açılır.
+- **No code signing / notarization.** The app is ad-hoc signed; on another Mac the first launch needs Gatekeeper approval.
+- **Cookies are stored unencrypted on disk** (`EnableCookieEncryption` off, the Electron default). Turning it on depends on the Keychain, and with unsigned/ad-hoc signed builds every new build triggers a Keychain permission prompt. If you sign with a real Developer ID, enabling it is recommended (the existing session is reset once when you do). The profile folder is only accessible to your user account; FileVault is recommended.
+- **Google/Microsoft/Apple sign-in** may occasionally restrict embedded browsers again. If that happens, use ChatGPT email + password sign-in or the "Log in" button inside a tab.
+- **Under automation** (`navigator.webdriver = true`) ChatGPT redirects signed-out users straight to Google sign-in, which is why the E2E tests use a stub page. This does not happen in normal use (verified in the package smoke test).
+- **Inactive tabs** are subject to Chromium's background throttling: a streaming answer keeps going, but the screen updates when you switch back to the tab. Each tab is a separate renderer process, so memory use grows with the number of tabs; a maximum of 50 tabs can be open as a safeguard.
+- **Open tabs are not restored on restart**; every launch starts with one clean tab (conversations are available from ChatGPT's left sidebar).
+- **No auto-update**; rerun `npm run package` for a new version.
+- `blob:` URLs (some previews ChatGPT opens "in a new window") open in a small sandboxed window.
 
-## Sorun giderme
+## Troubleshooting
 
-| Belirti | Çözüm |
+| Symptom | Fix |
 | --- | --- |
-| Sekmede "ChatGPT could not be loaded" | İnternet bağlantısını kontrol edip **Retry**'a basın |
-| "This tab stopped working" | **Reload tab** |
-| Login sonrası sekmeler hâlâ çıkış yapılmış görünüyor | `⌘R` ile sekmeyi yenileyin; olmazsa Settings → Clear ChatGPT Session → yeniden giriş |
-| Uygulama ikinci kez açılmıyor | Tek instance kilidi: mevcut pencere öne gelir |
-| Ayrıntılı log gerekiyor | `CHATGPT_TABS_DEBUG=1 "release/mac-arm64/ChatGPT Tabs.app/Contents/MacOS/ChatGPT Tabs"` (hassas veri loglanmaz) |
-| Ayrı/temiz profil denemek | `CHATGPT_TABS_USER_DATA_DIR=/tmp/profil ...` ile başlatın |
+| Tab shows "ChatGPT could not be loaded" | Check your internet connection and press **Retry** |
+| "This tab stopped working" | Press **Reload tab** |
+| Tabs still look signed out after login | Reload the tab with `⌘R`; if that fails, Settings → Clear ChatGPT Session → sign in again |
+| The app does not open a second time | Single-instance lock: the existing window comes to the front |
+| Need verbose logs | `CHATGPT_TABS_DEBUG=1 "release/mac-arm64/ChatGPT Tabs.app/Contents/MacOS/ChatGPT Tabs"` (no sensitive data is logged) |
+| Try a separate/clean profile | Launch with `CHATGPT_TABS_USER_DATA_DIR=/tmp/profile ...` |
