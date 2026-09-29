@@ -170,3 +170,31 @@ export async function openedExternally(app: ElectronApplication): Promise<string
 export async function stubHits(app: ElectronApplication, path: string): Promise<number> {
   return app.evaluate((_electron, p) => (globalThis as unknown as { __hits: Record<string, number> }).__hits[p] ?? 0, path)
 }
+
+/**
+ * Clicks an element inside the visible ChatGPT tab showing `path`, without waiting for the
+ * (possibly intentionally cancelled) navigation. Runs through the main process so it always hits
+ * the tab that is on screen, even when several tabs share the same URL.
+ */
+export async function clickInTab(app: ElectronApplication, selector: string, path = '/'): Promise<void> {
+  const target = `https://chatgpt.com${path}`
+  await expect
+    .poll(() =>
+      app.evaluate(
+        async ({ BrowserWindow }, args) => {
+          const win = BrowserWindow.getAllWindows().find((w) => w.webContents.getURL().startsWith('file:'))
+          const view = win?.contentView.children
+            .map((child) => child as Electron.WebContentsView)
+            .find((child) => child.webContents.getURL() === args.target && !child.webContents.isLoading())
+          if (!view) return false
+          // userGesture: behave like a real click (Chromium skips gesture-less entries in history).
+          return view.webContents.executeJavaScript(
+            `(() => { const el = document.querySelector(${JSON.stringify(args.selector)}); if (!el) return false; el.click(); return true })()`,
+            true
+          )
+        },
+        { target, selector }
+      )
+    )
+    .toBe(true)
+}

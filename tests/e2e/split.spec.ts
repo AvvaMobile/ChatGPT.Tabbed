@@ -7,16 +7,20 @@ import { attachedViews, clickMenu, launchApp, mainContentSize, tabContentsIds, t
 const TOP_BAR = 40
 
 function expectedSplit(size: { width: number; height: number }) {
-  const width = size.width
-  const leftWidth = Math.floor((width - 1) / 2)
+  const leftWidth = Math.floor((size.width - 1) / 2)
   return [
     { x: 0, y: TOP_BAR, width: leftWidth, height: size.height - TOP_BAR },
-    { x: leftWidth + 1, y: TOP_BAR, width: width - leftWidth - 1, height: size.height - TOP_BAR }
+    { x: leftWidth + 1, y: TOP_BAR, width: size.width - leftWidth - 1, height: size.height - TOP_BAR }
   ]
 }
 
 async function sortedBounds(app: Harness['app']) {
   return (await attachedViews(app)).map((view) => view.bounds).sort((a, b) => a.x - b.x)
+}
+
+async function fullWidth(app: Harness['app']) {
+  const size = await mainContentSize(app)
+  return [{ x: 0, y: TOP_BAR, width: size.width, height: size.height - TOP_BAR }]
 }
 
 test.describe('split view', () => {
@@ -28,87 +32,97 @@ test.describe('split view', () => {
     await h.cleanup()
   })
 
-  test('with a single tab, split view opens a new chat on the right and closes again', async () => {
+  test('opens a right column with its own tab strip and merges back when turned off', async () => {
     const { app, ui } = h
-    const tabs = ui.getByTestId('tab')
+    await ui.getByTestId('new-tab').click()
+    await expect(ui.getByTestId('tab')).toHaveCount(2)
+
     await ui.getByTestId('split-button').click()
-
-    await expect(tabs).toHaveCount(2)
-    await expect(ui.getByTestId('split-button')).toHaveAttribute('aria-pressed', 'true')
+    const left = ui.getByTestId('tab-strip-0').getByTestId('tab')
+    const right = ui.getByTestId('tab-strip-1').getByTestId('tab')
     await expect(ui.getByTestId('split')).toBeVisible()
-    await expect(tabs.nth(0)).toHaveAttribute('data-pane', 'left')
-    await expect(tabs.nth(1)).toHaveAttribute('data-pane', 'right')
-    // The new chat on the right gets the focus.
-    await expect(tabs.nth(1)).toHaveAttribute('data-active', 'true')
-
+    await expect(left).toHaveCount(2)
+    await expect(right).toHaveCount(1)
+    await expect(right.first()).toHaveAttribute('data-active', 'true')
+    await expect(right.first()).toHaveAttribute('data-pane', 'right')
+    await expect(left.nth(1)).toHaveAttribute('data-pane', 'left')
     await expect.poll(() => sortedBounds(app)).toEqual(expectedSplit(await mainContentSize(app)))
 
     await ui.getByTestId('split-button').click()
     await expect(ui.getByTestId('split')).toHaveCount(0)
-    await expect(tabs).toHaveCount(2)
-    await expect(tabs.nth(1)).not.toHaveAttribute('data-pane', /.+/)
-    const size = await mainContentSize(app)
-    await expect
-      .poll(() => sortedBounds(app))
-      .toEqual([{ x: 0, y: TOP_BAR, width: size.width, height: size.height - TOP_BAR }])
+    await expect(ui.getByTestId('tab-strip-1')).toHaveCount(0)
+    await expect(ui.getByTestId('tab-strip-0').getByTestId('tab')).toHaveCount(3)
+    await expect.poll(() => sortedBounds(app)).toEqual(await fullWidth(app))
   })
 
-  test('uses the neighbouring tab, and a tab picked in the tab bar replaces the focused pane', async () => {
-    const { ui } = h
-    const tabs = ui.getByTestId('tab')
-    await ui.getByTestId('new-tab').click()
-    await ui.getByTestId('new-tab').click()
-    await expect(tabs).toHaveCount(3)
-
-    await tabs.nth(0).click()
-    await ui.getByTestId('split-button').click()
-    await expect(tabs.nth(0)).toHaveAttribute('data-pane', 'left')
-    await expect(tabs.nth(1)).toHaveAttribute('data-pane', 'right')
-    await expect(tabs.nth(0)).toHaveAttribute('data-active', 'true')
-    await expect(tabs).toHaveCount(3)
-
-    // Tab 3 goes into the focused (left) pane; tab 2 stays on the right.
-    await tabs.nth(2).click()
-    await expect(tabs.nth(2)).toHaveAttribute('data-pane', 'left')
-    await expect(tabs.nth(2)).toHaveAttribute('data-active', 'true')
-    await expect(tabs.nth(1)).toHaveAttribute('data-pane', 'right')
-    await expect(tabs.nth(0)).not.toHaveAttribute('data-pane', /.+/)
-  })
-
-  test('focusing a pane makes its tab active', async () => {
+  test('each column manages its own tabs', async () => {
     const { app, ui } = h
-    const tabs = ui.getByTestId('tab')
     await ui.getByTestId('split-button').click()
-    await expect(tabs.nth(1)).toHaveAttribute('data-active', 'true')
+    const left = ui.getByTestId('tab-strip-0').getByTestId('tab')
+    const right = ui.getByTestId('tab-strip-1').getByTestId('tab')
+    await expect(right).toHaveCount(1)
 
-    // Focus the left pane's page directly, as a click into it would.
+    // "+" of the right column adds a tab there; the left column is untouched.
+    await ui.getByTestId('new-tab-right').click()
+    await expect(right).toHaveCount(2)
+    await expect(left).toHaveCount(1)
+    await expect(right.nth(1)).toHaveAttribute('data-active', 'true')
+    await expect(left.first()).toHaveAttribute('data-pane', 'left')
+
+    // Switching tabs inside the right column keeps the left column as it is.
+    await right.first().click()
+    await expect(right.first()).toHaveAttribute('data-pane', 'right')
+    await expect(right.nth(1)).not.toHaveAttribute('data-pane', /.+/)
+    await expect(left.first()).toHaveAttribute('data-pane', 'left')
+    expect(await attachedViews(app)).toHaveLength(2)
+
+    // Cmd/Ctrl+number and Cmd/Ctrl+T act on the focused column.
+    await clickMenu(app, 'Select Tab 2')
+    await expect(right.nth(1)).toHaveAttribute('data-active', 'true')
+    await clickMenu(app, 'New Tab')
+    await expect(right).toHaveCount(3)
+    await left.first().click()
+    await expect(left.first()).toHaveAttribute('data-active', 'true')
+    await clickMenu(app, 'New Tab')
+    await expect(left).toHaveCount(2)
+    await expect(right).toHaveCount(3)
+  })
+
+  test('clicking into a column focuses it', async () => {
+    const { app, ui } = h
+    await ui.getByTestId('split-button').click()
+    const left = ui.getByTestId('tab-strip-0').getByTestId('tab')
+    await expect(ui.getByTestId('tab-strip-1').getByTestId('tab').first()).toHaveAttribute('data-active', 'true')
+
     await app.evaluate(({ BrowserWindow }) => {
       const win = BrowserWindow.getAllWindows().find((w) => w.webContents.getURL().startsWith('file:'))!
-      const left = win.contentView.children
+      const leftView = win.contentView.children
         .map((child) => child as Electron.WebContentsView)
         .sort((a, b) => a.getBounds().x - b.getBounds().x)[0]
-      left.webContents.focus()
+      leftView.webContents.focus()
     })
-    await expect(tabs.nth(0)).toHaveAttribute('data-active', 'true')
-    await expect(tabs.nth(0)).toHaveAttribute('data-pane', 'left')
+    await expect(left.first()).toHaveAttribute('data-active', 'true')
   })
 
-  test('closing one of the split tabs leaves the other full width', async () => {
+  test('a tab can move to the other side; closing the last tab of a column ends split view', async () => {
     const { app, ui } = h
-    const tabs = ui.getByTestId('tab')
-    await ui.getByTestId('split-button').click()
-    await expect(tabs).toHaveCount(2)
-    await tabs.nth(1).getByTestId('tab-close').click()
-    await expect(tabs).toHaveCount(1)
-    await expect(ui.getByTestId('split-button')).toHaveAttribute('aria-pressed', 'false')
+    await ui.getByTestId('new-tab').click()
+    await ui.getByTestId('tab').first().click()
+    await clickMenu(app, 'Move Tab to Other Side')
+    const left = ui.getByTestId('tab-strip-0').getByTestId('tab')
+    const right = ui.getByTestId('tab-strip-1').getByTestId('tab')
+    await expect(left).toHaveCount(1)
+    await expect(right).toHaveCount(1)
+    await expect(right.first()).toHaveAttribute('data-active', 'true')
+
+    await right.first().getByTestId('tab-close').click()
+    await expect(ui.getByTestId('split')).toHaveCount(0)
+    await expect(ui.getByTestId('tab')).toHaveCount(1)
     expect(await tabContentsIds(app)).toHaveLength(1)
-    const size = await mainContentSize(app)
-    await expect
-      .poll(() => sortedBounds(app))
-      .toEqual([{ x: 0, y: TOP_BAR, width: size.width, height: size.height - TOP_BAR }])
+    await expect.poll(() => sortedBounds(app)).toEqual(await fullWidth(app))
   })
 
-  test('split panes follow window resizes and the menu shortcut toggles split view', async () => {
+  test('panes follow resizes, Settings hides both, and the shortcut toggles split view', async () => {
     const { app, ui } = h
     const accelerator = await app.evaluate(({ Menu }) => {
       const find = (items: Electron.MenuItem[]): Electron.MenuItem | undefined => {
@@ -137,30 +151,40 @@ test.describe('split view', () => {
       await expect.poll(async () => sortedBounds(app)).toEqual(expectedSplit(await mainContentSize(app)))
     }
 
-    // Settings hides both panes.
     await ui.getByTestId('settings-button').click()
+    await expect(ui.getByTestId('settings')).toBeVisible()
     await expect.poll(async () => (await attachedViews(app)).length).toBe(0)
     await ui.keyboard.press('Escape')
+    await expect(ui.getByTestId('settings')).toHaveCount(0)
     await expect.poll(async () => (await attachedViews(app)).length).toBe(2)
   })
 })
 
-test('split view is restored after a restart', async () => {
+test('both columns and their tabs are restored after a restart', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'chatgpt-tabs-split-'))
   try {
     const first = await launchApp(dir)
     await first.ui.getByTestId('split-button').click()
-    await expect(first.ui.getByTestId('tab')).toHaveCount(2)
+    await first.ui.getByTestId('new-tab-right').click()
+    await expect(first.ui.getByTestId('tab-strip-1').getByTestId('tab')).toHaveCount(2)
     await first.cleanup()
 
     const saved = JSON.parse(readFileSync(join(dir, 'tabs.json'), 'utf8'))
-    expect(saved.split).toEqual({ left: 0, right: 1 })
+    expect(saved.split).toEqual({ left: 0, right: 2 })
+    expect(saved.tabs.map((tab: { group: number }) => tab.group)).toEqual([0, 1, 1])
 
-    const second = await launchApp(dir, { expectTabs: 2, resetToHome: false })
+    const second = await launchApp(dir, { expectTabs: 3, resetToHome: false })
     await expect(second.ui.getByTestId('split')).toBeVisible()
-    await expect(second.ui.getByTestId('tab').nth(0)).toHaveAttribute('data-pane', 'left')
-    await expect(second.ui.getByTestId('tab').nth(1)).toHaveAttribute('data-pane', 'right')
+    await expect(second.ui.getByTestId('tab-strip-0').getByTestId('tab')).toHaveCount(1)
+    await expect(second.ui.getByTestId('tab-strip-1').getByTestId('tab')).toHaveCount(2)
+    await expect(second.ui.getByTestId('tab-strip-1').getByTestId('tab').nth(1)).toHaveAttribute('data-active', 'true')
     await expect.poll(async () => (await attachedViews(second.app)).length).toBe(2)
+    // Only the two visible tabs are loaded.
+    const loaded = await second.app.evaluate(({ BrowserWindow, webContents }) => {
+      const windowIds = new Set(BrowserWindow.getAllWindows().map((w) => w.webContents.id))
+      return webContents.getAllWebContents().filter((wc) => !windowIds.has(wc.id) && wc.getURL() !== '').length
+    })
+    expect(loaded).toBe(2)
     await second.cleanup()
   } finally {
     rmSync(dir, { recursive: true, force: true })

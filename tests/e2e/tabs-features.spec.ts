@@ -2,12 +2,8 @@ import { expect, test } from '@playwright/test'
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { clickMenu, getTabPage, launchApp, type Harness } from './helpers'
+import { clickInTab, clickMenu, getTabPage, launchApp, type Harness } from './helpers'
 
-async function clickInTab(app: Harness['app'], selector: string, path = '/'): Promise<void> {
-  const page = await getTabPage(app, path)
-  await page.evaluate((sel) => (document.querySelector(sel) as HTMLElement).click(), selector)
-}
 
 function readSavedTabs(dir: string): { activeIndex: number; tabs: Array<{ url: string; title: string; customTitle: string | null }> } {
   return JSON.parse(readFileSync(join(dir, 'tabs.json'), 'utf8'))
@@ -110,8 +106,8 @@ test.describe('restoring tabs', () => {
       const saved = readSavedTabs(dir)
       expect(saved.activeIndex).toBe(1)
       expect(saved.tabs).toEqual([
-        { url: 'https://chatgpt.com/c/conversation-2', title: 'Stub /c/conversation-2', customTitle: null },
-        { url: 'https://chatgpt.com/', title: 'Stub /', customTitle: 'Pinned' }
+        { url: 'https://chatgpt.com/c/conversation-2', title: 'Stub /c/conversation-2', customTitle: null, group: 0 },
+        { url: 'https://chatgpt.com/', title: 'Stub /', customTitle: 'Pinned', group: 0 }
       ])
 
       const second = await launchApp(dir, { expectTabs: 2, resetToHome: false })

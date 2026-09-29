@@ -17,6 +17,8 @@ export interface SavedTab {
   url: string
   title: string
   customTitle: string | null
+  /** Column in split view (0 = left). */
+  group: 0 | 1
 }
 
 export interface SavedSplit {
@@ -48,7 +50,7 @@ export function sanitizeSavedTab(value: unknown): SavedTab | null {
   if (!url) return null
   const title = typeof record.title === 'string' ? cleanTitle(record.title, MAX_PAGE_TITLE_LENGTH) : ''
   const custom = typeof record.customTitle === 'string' ? cleanTitle(record.customTitle, MAX_TAB_NAME_LENGTH) : ''
-  return { url, title, customTitle: custom || null }
+  return { url, title, customTitle: custom || null, group: record.group === 1 ? 1 : 0 }
 }
 
 /** Validates data read from disk; anything unexpected is dropped rather than trusted. */
@@ -63,8 +65,14 @@ export function parseTabSession(value: unknown): SavedTabSession | null {
   if (tabs.length === 0) return null
   const rawIndex = typeof record.activeIndex === 'number' && Number.isInteger(record.activeIndex) ? record.activeIndex : 0
   let activeIndex = Math.min(Math.max(rawIndex, 0), tabs.length - 1)
-  const split = parseSplit(record.split, tabs.length)
-  if (split && activeIndex !== split.left && activeIndex !== split.right) activeIndex = split.left
+  let split = parseSplit(record.split, tabs.length)
+  // A split must have its left tab in column 0 and its right tab in column 1.
+  if (split && (tabs[split.left].group !== 0 || tabs[split.right].group !== 1)) split = null
+  if (!split) {
+    for (const tab of tabs) tab.group = 0
+  } else if (activeIndex !== split.left && activeIndex !== split.right) {
+    activeIndex = split.left
+  }
   return { version: TAB_SESSION_VERSION, activeIndex, tabs, split }
 }
 

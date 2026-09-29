@@ -101,6 +101,13 @@ export function buildApplicationMenu(controller: AppController): Menu {
         { type: 'separator' },
         { label: 'Rename Tab…', accelerator: 'CmdOrCtrl+Shift+E', click: () => controller.beginRename() },
         { label: 'Toggle Split View', accelerator: 'CmdOrCtrl+\\', click: () => controller.toggleSplit() },
+        {
+          label: 'Move Tab to Other Side',
+          click: () => {
+            const id = controller.tabManager?.getActiveId()
+            if (id) controller.moveToOtherSide(id)
+          }
+        },
         { type: 'separator' },
         ...tabNumberItems
       ]

@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
   attachedViews,
+  clickInTab,
   clickMenu,
   getTabPage,
   launchApp,
@@ -16,11 +17,6 @@ import {
 
 const TOP_BAR = 40
 
-/** DOM click that does not wait for the (intentionally cancelled) navigation to settle. */
-async function clickInTab(app: Harness['app'], selector: string, path = '/'): Promise<void> {
-  const page = await getTabPage(app, path)
-  await page.evaluate((sel) => (document.querySelector(sel) as HTMLElement).click(), selector)
-}
 
 let h: Harness
 
@@ -96,8 +92,7 @@ test('new tabs start clean, switching preserves per-tab navigation state', async
   const tabs = ui.getByTestId('tab')
 
   // Tab 1 navigates to a conversation.
-  const first = await getTabPage(app, '/')
-  await first.click('#conv')
+  await clickInTab(app, '#conv')
   await expect(tabs.nth(0)).toHaveAttribute('data-title', 'Stub /c/conversation-2')
 
   // New tab does not clone the active URL.
@@ -300,7 +295,7 @@ test('clear session removes cookies and storage and resets tabs', async () => {
   await expect(async () => {
     await first.evaluate(() => localStorage.setItem('probe', '1'))
   }).toPass()
-  await first.click('#conv')
+  await clickInTab(app, '#conv')
 
   await ui.getByTestId('settings-button').click()
   await expect(ui.getByTestId('auth-status')).toHaveText('Signed in')

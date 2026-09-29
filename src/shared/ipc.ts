@@ -34,7 +34,12 @@ export interface TabInfo {
   title: string
   /** Origin + path only; query strings/fragments are stripped before leaving the main process. */
   url: string
+  /** Active tab of the focused column. */
   active: boolean
+  /** Shown in its column (the column's active tab). */
+  selected: boolean
+  /** Column the tab belongs to: 0 = left (or the only one), 1 = right. */
+  group: 0 | 1
   /** True when the user gave the tab a custom name. */
   renamed: boolean
   /** Which split-view pane shows this tab, or null when it is not on screen in split view. */
@@ -85,7 +90,8 @@ export interface RendererApi {
   getState(): Promise<AppState>
   getInfo(): Promise<AppInfo>
   onStateChanged(listener: (state: AppState) => void): () => void
-  createTab(): Promise<void>
+  /** Opens a new chat in the given column (defaults to the focused one). */
+  createTab(group?: 0 | 1): Promise<void>
   activateTab(id: string): Promise<void>
   closeTab(id: string): Promise<void>
   reloadTab(id?: string): Promise<void>

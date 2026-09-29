@@ -74,7 +74,7 @@ function Tab({ tab, editing, onEdit }: { tab: TabInfo; editing: boolean; onEdit:
       data-testid="tab"
       data-tab-id={tab.id}
       data-active={tab.active}
-      className={`tab${tab.active ? ' tab--active' : ''}${tab.pane ? ' tab--visible' : ''}`}
+      className={`tab${tab.active ? ' tab--active' : tab.selected ? ' tab--selected' : ''}`}
       data-title={tab.title}
       data-renamed={tab.renamed}
       data-pane={tab.pane ?? undefined}
@@ -114,65 +114,79 @@ function Tab({ tab, editing, onEdit }: { tab: TabInfo; editing: boolean; onEdit:
   )
 }
 
+interface StripProps {
+  tabs: TabInfo[]
+  group: 0 | 1
+  label: string
+  editingId: string | null
+  onEdit: (id: string | null) => void
+}
+
+/** One row of tabs plus its own "new tab" button (one per column in split view). */
+function TabStrip({ tabs, group, label, editingId, onEdit }: StripProps) {
+  return (
+    <div className="tabs" role="tablist" aria-label={label} data-testid={`tab-strip-${group}`}>
+      {tabs.map((tab) => (
+        <Tab key={tab.id} tab={tab} editing={editingId === tab.id} onEdit={onEdit} />
+      ))}
+      <button
+        type="button"
+        className="icon-button new-tab"
+        aria-label={`New tab (${label})`}
+        title="New tab"
+        data-testid={group === 0 ? 'new-tab' : 'new-tab-right'}
+        onClick={() => void api.createTab(group)}
+      >
+        <PlusIcon />
+      </button>
+    </div>
+  )
+}
+
 export function TabBar({ state }: { state: AppState }) {
   const active = state.tabs.find((tab) => tab.active)
   const [editingId, setEditingId] = useState<string | null>(null)
+  const focusedGroup = active?.group ?? 0
 
   // "Rename Tab…" from the app menu or the tab's context menu.
   useEffect(() => api.onBeginRename((id) => setEditingId(id)), [])
 
-  return (
-    <header className="topbar" data-fullscreen={state.fullscreen}>
-      <div className="topbar__nav">
-        <button
-          type="button"
-          className="icon-button"
-          aria-label="Back"
-          title="Back"
-          disabled={!active?.canGoBack || state.settingsOpen}
-          onClick={() => void api.goBack()}
-        >
-          <BackIcon />
-        </button>
-        <button
-          type="button"
-          className="icon-button"
-          aria-label="Forward"
-          title="Forward"
-          disabled={!active?.canGoForward || state.settingsOpen}
-          onClick={() => void api.goForward()}
-        >
-          <ForwardIcon />
-        </button>
-        <button
-          type="button"
-          className="icon-button"
-          aria-label="Reload"
-          title="Reload"
-          data-testid="reload"
-          disabled={!active || state.settingsOpen}
-          onClick={() => void api.reloadTab()}
-        >
-          <ReloadIcon />
-        </button>
-      </div>
-
-      <div className="tabs" role="tablist" aria-label="ChatGPT tabs">
-        {state.tabs.map((tab) => (
-          <Tab key={tab.id} tab={tab} editing={editingId === tab.id} onEdit={setEditingId} />
-        ))}
-        <button
-          type="button"
-          className="icon-button new-tab"
-          aria-label="New tab"
-          title="New tab"
-          data-testid="new-tab"
-          onClick={() => void api.createTab()}
-        >
-          <PlusIcon />
-        </button>
-      </div>
-
+  const nav = (
+    <div className="topbar__nav">
+      <button
+        type="button"
+        className="icon-button"
+        aria-label="Back"
+        title="Back"
+        disabled={!active?.canGoBack || state.settingsOpen}
+        onClick={() => void api.goBack()}
+      >
+        <BackIcon />
+      </button>
+      <button
+        type="button"
+        className="icon-button"
+        aria-label="Forward"
+        title="Forward"
+        disabled={!active?.canGoForward || state.settingsOpen}
+        onClick={() => void api.goForward()}
+      >
+        <ForwardIcon />
+      </button>
+      <button
+        type="button"
+        className="icon-button"
+        aria-label="Reload"
+        title="Reload"
+        data-testid="reload"
+        disabled={!active || state.settingsOpen}
+        onClick={() => void api.reloadTab()}
+      >
+        <ReloadIcon />
+      </button>
+    </div>
+  )
+  const actions = (
       <div className="topbar__actions">
         <button
           type="button"
@@ -197,6 +211,31 @@ export function TabBar({ state }: { state: AppState }) {
           <SettingsIcon />
         </button>
       </div>
+  )
+
+  if (state.split) {
+    const left = state.tabs.filter((tab) => tab.group === 0)
+    const right = state.tabs.filter((tab) => tab.group === 1)
+    return (
+      <header className="topbar topbar--split" data-fullscreen={state.fullscreen}>
+        <div className={`topbar__half topbar__half--left${focusedGroup === 0 ? ' topbar__half--focused' : ''}`}>
+          {nav}
+          <TabStrip tabs={left} group={0} label="Left column tabs" editingId={editingId} onEdit={setEditingId} />
+        </div>
+        <div className="topbar__divider" />
+        <div className={`topbar__half topbar__half--right${focusedGroup === 1 ? ' topbar__half--focused' : ''}`}>
+          <TabStrip tabs={right} group={1} label="Right column tabs" editingId={editingId} onEdit={setEditingId} />
+          {actions}
+        </div>
+      </header>
+    )
+  }
+
+  return (
+    <header className="topbar" data-fullscreen={state.fullscreen}>
+      {nav}
+      <TabStrip tabs={state.tabs} group={0} label="ChatGPT tabs" editingId={editingId} onEdit={setEditingId} />
+      {actions}
     </header>
   )
 }

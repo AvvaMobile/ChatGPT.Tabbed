@@ -43,7 +43,10 @@ export function registerIpc(controller: AppController): void {
 
   handle(IpcChannel.GetState, () => controller.getState())
   handle(IpcChannel.GetInfo, () => controller.getInfo())
-  handle(IpcChannel.CreateTab, () => controller.newTab())
+  handle(IpcChannel.CreateTab, (group) => {
+    if (group !== undefined && group !== null && group !== 0 && group !== 1) throw new Error('Invalid column')
+    controller.newTab(group ?? undefined)
+  })
   handle(IpcChannel.ActivateTab, (id) => controller.activateTab(requireTabId(id)))
   handle(IpcChannel.CloseTab, (id) => controller.closeTab(requireTabId(id)))
   handle(IpcChannel.ReloadTab, (id) => {

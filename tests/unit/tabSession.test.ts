@@ -30,7 +30,7 @@ describe('parseTabSession', () => {
       ]
     })
     expect(session?.activeIndex).toBe(1)
-    expect(session?.tabs[1]).toEqual({ url: 'https://chatgpt.com/c/1', title: 'Trip', customTitle: 'Lisbon' })
+    expect(session?.tabs[1]).toEqual({ url: 'https://chatgpt.com/c/1', title: 'Trip', customTitle: 'Lisbon', group: 0 })
   })
 
   it('drops invalid entries and clamps the active index', () => {
@@ -42,7 +42,7 @@ describe('parseTabSession', () => {
     expect(session).toEqual({
       version: 1,
       activeIndex: 0,
-      tabs: [{ url: 'https://chatgpt.com/c/2', title: '', customTitle: null }],
+      tabs: [{ url: 'https://chatgpt.com/c/2', title: '', customTitle: null, group: 0 }],
       split: null
     })
   })
@@ -55,7 +55,7 @@ describe('parseTabSession', () => {
   })
 
   it('keeps a valid split and makes the active tab one of its panes', () => {
-    const tabs = [0, 1, 2].map((i) => ({ url: `https://chatgpt.com/c/${i}` }))
+    const tabs = [0, 1, 2].map((i) => ({ url: `https://chatgpt.com/c/${i}`, group: i === 2 ? 1 : 0 }))
     expect(parseTabSession({ version: 1, activeIndex: 2, tabs, split: { left: 0, right: 2 } })).toMatchObject({
       activeIndex: 2,
       split: { left: 0, right: 2 }
@@ -63,8 +63,16 @@ describe('parseTabSession', () => {
     expect(parseTabSession({ version: 1, activeIndex: 1, tabs, split: { left: 0, right: 2 } })?.activeIndex).toBe(0)
   })
 
+  it('drops a split whose tabs are not in the right columns, and puts every tab in one column', () => {
+    const tabs = [0, 1].map((i) => ({ url: `https://chatgpt.com/c/${i}`, group: 0 }))
+    const session = parseTabSession({ version: 1, activeIndex: 0, tabs, split: { left: 0, right: 1 } })
+    expect(session?.split).toBeNull()
+    const stray = parseTabSession({ version: 1, activeIndex: 0, tabs: [{ url: 'https://chatgpt.com/', group: 1 }] })
+    expect(stray?.tabs[0].group).toBe(0)
+  })
+
   it('drops invalid splits', () => {
-    const tabs = [0, 1].map((i) => ({ url: `https://chatgpt.com/c/${i}` }))
+    const tabs = [0, 1].map((i) => ({ url: `https://chatgpt.com/c/${i}`, group: i }))
     for (const split of [{ left: 0, right: 0 }, { left: 0, right: 5 }, { left: -1, right: 1 }, { left: '0', right: 1 }, 'yes']) {
       expect(parseTabSession({ version: 1, activeIndex: 0, tabs, split })?.split).toBeNull()
     }
@@ -76,7 +84,7 @@ describe('parseTabSession', () => {
   })
 
   it('cleans names', () => {
-    const session = buildTabSession([{ url: 'https://chatgpt.com/', title: 'a\u0000b', customTitle: 'x'.repeat(500) }], 0)
+    const session = buildTabSession([{ url: 'https://chatgpt.com/', title: 'a\u0000b', customTitle: 'x'.repeat(500), group: 0 }], 0)
     expect(session.tabs[0].title).toBe('a b')
     expect(session.tabs[0].customTitle).toHaveLength(80)
   })

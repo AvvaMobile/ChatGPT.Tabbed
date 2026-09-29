@@ -93,6 +93,40 @@ html[data-platform='darwin'] .topbar[data-fullscreen='true'] {
   --leading-inset: 10px;
 }
 
+/* Split view: one half per column, aligned with the panes below (50% each around a 1px gap). */
+.topbar--split {
+  display: grid;
+  grid-template-columns: calc(50% - 0.5px) 1px calc(50% - 0.5px);
+  gap: 0;
+  padding: 0;
+}
+
+.topbar__half {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  height: 100%;
+}
+
+.topbar__half--left {
+  padding: 0 6px 0 var(--leading-inset);
+}
+
+.topbar__half--right {
+  padding: 0 calc(var(--trailing-inset) + 6px) 0 6px;
+}
+
+.topbar__half:not(.topbar__half--focused) .tabs {
+  opacity: 0.72;
+}
+
+.topbar__divider {
+  align-self: stretch;
+  background: var(--border);
+  -webkit-app-region: no-drag;
+}
+
 .topbar__nav,
 .topbar__actions {
   display: flex;
@@ -174,24 +208,11 @@ html[data-platform='darwin'] .topbar[data-fullscreen='true'] {
   box-shadow: var(--shadow), 0 0 0 1px var(--border);
 }
 
-.tab--visible:not(.tab--active) {
+.tab--selected,
+.tab--selected:hover {
+  background: color-mix(in srgb, var(--tab-active) 60%, transparent);
   color: var(--text);
-  box-shadow: inset 0 0 0 1px var(--border);
-}
-
-.tab--visible::after {
-  content: '';
-  position: absolute;
-  left: 10px;
-  right: 10px;
-  bottom: 1px;
-  height: 2px;
-  border-radius: 2px;
-  background: var(--border);
-}
-
-.tab--visible.tab--active::after {
-  background: var(--focus);
+  box-shadow: 0 0 0 1px var(--border);
 }
 
 .tab__icon {

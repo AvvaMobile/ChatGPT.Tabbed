@@ -106,19 +106,24 @@ export class AppController {
       return
     }
     log.info(`restoring ${saved.tabs.length} tab(s)${saved.split ? ' in split view' : ''}`)
+    // Every tab starts deferred; only the tabs that are on screen get loaded below.
+    if (saved.split) tabs.enableSplitEmpty()
     const ids = saved.tabs.map(
-      (tab, index) =>
+      (tab) =>
         tabs.createTab({
           url: tab.url,
           title: tab.title,
           customTitle: tab.customTitle,
-          activate: index === saved.activeIndex,
-          lazy: index !== saved.activeIndex
+          group: saved.split ? tab.group : 0,
+          activate: false,
+          lazy: true
         })?.id ?? null
     )
-    const left = saved.split ? ids[saved.split.left] : null
-    const right = saved.split ? ids[saved.split.right] : null
-    if (left && right) tabs.restoreSplit(left, right)
+    const other = saved.split ? (saved.activeIndex === saved.split.left ? saved.split.right : saved.split.left) : null
+    for (const index of [other, saved.activeIndex]) {
+      const id = index === null ? null : ids[index]
+      if (id) tabs.activateTab(id)
+    }
   }
 
   private currentTabSession(tabs: TabManager) {
@@ -164,9 +169,9 @@ export class AppController {
 
   // ---- tab commands -------------------------------------------------------
 
-  newTab(): void {
+  newTab(group?: 0 | 1): void {
     this.setSettingsOpen(false)
-    this.tabs?.createTab()
+    this.tabs?.createTab({ group })
   }
 
   activateTab(id: string): void {
@@ -210,12 +215,9 @@ export class AppController {
     this.tabs?.toggleSplit()
   }
 
-  openInSplit(id: string): void {
+  moveToOtherSide(id: string): void {
     this.setSettingsOpen(false)
-    const tabs = this.tabs
-    if (!tabs?.getTab(id)) return
-    if (tabs.getActiveId() === id && !tabs.isSplit) tabs.enableSplit()
-    else tabs.enableSplit(id)
+    this.tabs?.moveToOtherSide(id)
   }
 
   renameTab(id: string, name: string | null): void {
@@ -236,14 +238,15 @@ export class AppController {
     const tab = this.tabs?.getTab(id)
     if (!tab) return
     const snapshot = tab.pendingUrl ?? tab.url
-    this.tabs?.createTab({ url: snapshot })
+    this.tabs?.createTab({ url: snapshot, group: this.tabs.groupOf(id) ?? undefined })
   }
 
   closeOtherTabs(id: string): void {
     const tabs = this.tabs
     if (!tabs?.getTab(id)) return
+    const group = tabs.groupOf(id)
     for (const info of tabs.listTabs()) {
-      if (info.id !== id) tabs.closeTab(info.id)
+      if (info.id !== id && info.group === group) tabs.closeTab(info.id)
     }
     tabs.activateTab(id)
   }
@@ -261,9 +264,9 @@ export class AppController {
       { label: 'Reload Tab', click: () => this.reloadTab(id) },
       { label: 'Duplicate Tab', click: () => this.duplicateTab(id) },
       {
-        label: 'Open in Split View',
-        enabled: !(this.tabs?.isSplit && this.tabs.listTabs().some((t) => t.id === id && t.pane !== null)),
-        click: () => this.openInSplit(id)
+        label: this.tabs?.isSplit ? 'Move to Other Side' : 'Open in Split View',
+        enabled: this.tabs?.isSplit || total > 1,
+        click: () => this.moveToOtherSide(id)
       },
       { type: 'separator' },
       { label: 'Close Tab', click: () => this.closeTab(id) },

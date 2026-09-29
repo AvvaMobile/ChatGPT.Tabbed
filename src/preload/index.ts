@@ -16,7 +16,7 @@ const api: RendererApi = {
       ipcRenderer.removeListener(IpcChannel.StateChanged, handler)
     }
   },
-  createTab: () => ipcRenderer.invoke(IpcChannel.CreateTab),
+  createTab: (group) => ipcRenderer.invoke(IpcChannel.CreateTab, group),
   activateTab: (id) => ipcRenderer.invoke(IpcChannel.ActivateTab, id),
   closeTab: (id) => ipcRenderer.invoke(IpcChannel.CloseTab, id),
   reloadTab: (id) => ipcRenderer.invoke(IpcChannel.ReloadTab, id),
