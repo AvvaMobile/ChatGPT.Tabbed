@@ -271,6 +271,10 @@ test('login window uses the shared persistent session and cleans up on close', a
       expirationDate: Math.floor(Date.now() / 1000) + 3600
     })
     const login = BrowserWindow.getAllWindows().find((w) => w.getTitle() === 'Sign in to ChatGPT')!
+    // Let the initial login page finish first so the next navigation does not abort it (-3).
+    if (login.webContents.isLoading()) {
+      await new Promise<void>((done) => login.webContents.once('did-stop-loading', () => done()))
+    }
     await login.webContents.loadURL('https://chatgpt.com/')
   })
   await expect.poll(() => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length)).toBe(1)
