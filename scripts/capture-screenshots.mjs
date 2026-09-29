@@ -136,6 +136,16 @@ try {
   await sleep(1500)
   capture('many-tabs')
 
+  // Split view: a second column with its own tab.
+  await ui.locator('[data-testid=split-button]').click()
+  const splitPage = await waitForNewTabPage(known)
+  known.push(splitPage)
+  await prepare(splitPage, 'Blog outline', 'Outline a blog post about working with two chats side by side.')
+  await sleep(1500)
+  capture('split')
+  await ui.locator('[data-testid=split-button]').click()
+  await ui.locator('[data-testid=tab]').first().click()
+
   // Dark appearance: ChatGPT and the tab bar both follow the system theme.
   const setScheme = async (page, value) => {
     if (page.isClosed()) return

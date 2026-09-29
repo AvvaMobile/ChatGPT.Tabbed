@@ -67,8 +67,10 @@ You can check the signature yourself: `spctl --assess --verbose "/Applications/C
 | Many chats side by side | Renaming a tab |
 | --- | --- |
 | ![Eight named tabs](site/img/many-tabs.png) | ![Renaming a tab inline](site/img/rename.png) |
-| **Dark mode** | **Settings** |
-| ![Dark mode](site/img/dark.png) | ![Settings screen with the Reopen tabs option](site/img/settings.png) |
+| **Split view** | **Dark mode** |
+| ![Two columns side by side, each with its own tabs](site/img/split.png) | ![Dark mode](site/img/dark.png) |
+| **Settings** | |
+| ![Settings screen with the Reopen tabs option](site/img/settings.png) | |
 
 The screenshots are taken from the real app by `node scripts/capture-screenshots.mjs` (macOS, after packaging). It uses a throw-away profile and no account; prompts are typed into the composer but never sent.
 
