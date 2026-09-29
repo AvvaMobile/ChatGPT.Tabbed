@@ -16,7 +16,7 @@ electronFuses:
   enableNodeCliInspectArguments: false
   enableEmbeddedAsarIntegrityValidation: true
   onlyLoadAppFromAsar: true
-  enableCookieEncryption: false
+  enableCookieEncryption: true
 mac:
   category: public.app-category.productivity
   target:

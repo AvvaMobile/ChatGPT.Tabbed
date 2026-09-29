@@ -29,7 +29,7 @@ Windows on ARM devices can use the x64 build (it runs under Windows' built-in em
 
 ### Verify your download (recommended)
 
-The builds are not signed with a paid certificate (see below), so checking the SHA-256 hash against `SHA256SUMS.txt` from the same release is the way to make sure the file was not tampered with:
+macOS downloads are signed with a Developer ID and notarized by Apple; the Windows build is not code-signed yet. Checking the SHA-256 hash against `SHA256SUMS.txt` from the same release confirms the file was not tampered with:
 
 ```bash
 # macOS
@@ -46,10 +46,10 @@ The printed hash must match the line for that file in `SHA256SUMS.txt`. Only dow
 ### Install on macOS
 
 1. Open the `.dmg` and drag **ChatGPT Tabs** into **Applications**.
-2. The first launch is blocked because the app is not notarized by Apple ("Apple could not verify…" / "cannot be opened"). Allow it **once**, either way:
-   - **System Settings → Privacy & Security**, scroll down to the message about "ChatGPT Tabs" → **Open Anyway** → confirm; or
-   - in Terminal: `xattr -dr com.apple.quarantine "/Applications/ChatGPT Tabs.app"`
-3. After that it opens normally. Microphone access for voice chat is requested by macOS on first use.
+2. Open it from Applications or Launchpad. The app is signed with a Developer ID and notarized by Apple, so macOS only shows its standard "downloaded from the internet" confirmation on the first launch.
+3. Microphone/camera access for voice chat is requested by macOS on first use.
+
+You can check the signature yourself: `spctl --assess --verbose "/Applications/ChatGPT Tabs.app"` should report `source=Notarized Developer ID`.
 
 ### Install on Windows
 
@@ -113,7 +113,22 @@ open "release/mac-arm64/ChatGPT Tabs.app"      # macOS (Apple Silicon)
 & "release\win-unpacked\ChatGPT Tabs.exe"      # Windows
 ```
 
-A self-built Mac app is ad-hoc signed and opens directly on the machine that built it. For public distribution with no security prompts you need an Apple Developer ID certificate + notarization (macOS) and an Authenticode certificate (Windows); configure them in `electron-builder.yml` / via the standard electron-builder `CSC_*` environment variables.
+`npm run package` produces **ad-hoc signed** Mac apps: they open directly on the machine that built them, but other Macs will block them. For distribution use the signed build below. Windows builds are unsigned; an Authenticode certificate can be configured via the standard electron-builder `CSC_*` / `WIN_CSC_*` environment variables.
+
+### Signed and notarized macOS build
+
+Requires an Apple Developer account with a **Developer ID Application** certificate in the login keychain and an **App Store Connect API key** (`.p8`).
+
+1. Put the key file in `~/.appstoreconnect/private_keys/AuthKey_<KEY_ID>.p8`.
+2. Create `.env.signing.local` in the project root (it is git-ignored and must never be committed):
+   ```
+   APPLE_API_KEY_ID=<key id>
+   APPLE_API_ISSUER=<issuer id>
+   # optional: MAC_SIGNING_IDENTITY="Developer ID Application: Your Company (TEAMID)"
+   ```
+3. Run `npm run package:mac:signed`. It builds the Apple Silicon and Intel DMGs with the hardened runtime, signs them, notarizes and staples both the apps and the DMGs, and verifies the result with `codesign`, `spctl` and `stapler`.
+
+The certificate never leaves the keychain and the API key never leaves the machine; nothing is stored in the repository or in CI.
 
 ### Scripts
 
@@ -127,7 +142,9 @@ A self-built Mac app is ad-hoc signed and opens directly on the machine that bui
 | `npm test` | Unit tests (Vitest) + Electron E2E tests (Playwright) |
 | `npm run test:unit` | Unit tests only |
 | `npm run test:e2e` | Build + Playwright tests against the real Electron app |
-| `npm run package` | macOS `.dmg` for Apple Silicon and Intel |
+| `npm run package` | macOS `.dmg` for Apple Silicon and Intel (ad-hoc signed) |
+| `npm run package:mac:signed` | Developer ID signed + notarized macOS `.dmg`s (needs local signing setup) |
+| `npm run release:mac -- vX.Y.Z` | Uploads the signed DMGs to the GitHub release `vX.Y.Z` |
 | `npm run package:win` | Windows installer + portable `.zip` (run on Windows) |
 | `npm run package:linux` | Linux AppImage (run on Linux) |
 | `npm run smoke:package` | Launches the packaged app for the current OS with an isolated profile and smoke-tests it |
@@ -149,7 +166,13 @@ Steps for a maintainer:
    git push origin master --tags
    ```
 3. Wait for the **Release** workflow (Actions tab). It creates a **draft** release for the tag containing both `.dmg` files, the Windows installer, the portable `.zip` and `SHA256SUMS.txt`, with auto-generated release notes.
-4. Review the draft on the Releases page and click **Publish release**. The [Download](#download) link above always points to the newest published release.
+4. Replace the CI-built (ad-hoc signed) Mac files with signed and notarized ones, from a Mac that has the signing setup described in [Signed and notarized macOS build](#signed-and-notarized-macos-build):
+   ```bash
+   npm run package:mac:signed
+   npm run release:mac -- v1.1.0
+   ```
+   This uploads both DMGs to the draft (replacing the CI ones) and updates their lines in `SHA256SUMS.txt`. The script refuses to upload DMGs that are not notarized.
+5. Review the draft on the Releases page and click **Publish release**. The [Download](#download) link above always points to the newest published release.
 
 Running the Release workflow manually (Actions → Release → *Run workflow*) builds the same files as downloadable workflow artifacts without creating a release, which is handy for testing.
 
@@ -269,7 +292,7 @@ Electron appends `Electron/x.y` and app-name tokens to its default User-Agent, w
 | `EnableNodeCliInspectArguments` | off | No debugger attach to the main process via `--inspect` |
 | `EnableEmbeddedAsarIntegrityValidation` | on | The app refuses to start if `app.asar` was modified |
 | `OnlyLoadAppFromAsar` | on | Code is only loaded from the integrity-checked `app.asar` |
-| `EnableCookieEncryption` | off | See [limitations](#known-limitations) |
+| `EnableCookieEncryption` | on | Cookies on disk are encrypted with a Keychain (macOS) / DPAPI (Windows) key |
 
 Other measures: single-instance lock (one profile cannot be opened by two processes), strict CSP on the local UI (`script-src 'self'`, `object-src 'none'`, `frame-src 'none'`, `form-action 'none'`), the local UI never navigates or opens windows (a file dropped on the tab bar cannot replace the UI), and OAuth popups are sandboxed too.
 
@@ -353,9 +376,9 @@ Signing in with a real ChatGPT account is intentionally not automated. Manual sm
 
 ## Known limitations
 
-- **No code signing / notarization.** The Mac app is ad-hoc signed and not notarized; the Windows build is not Authenticode-signed. The first launch needs a one-time approval (Gatekeeper / SmartScreen), see [Download](#download).
+- **Windows builds are not code-signed.** SmartScreen asks for a one-time confirmation, see [Download](#download). macOS release builds are Developer ID signed and notarized; builds made with plain `npm run package` (or by CI) are only ad-hoc signed.
 - **Windows** builds and tests run on GitHub's Windows runners (CI); the author's own manual testing was done on macOS.
-- **Cookies are stored unencrypted on disk** (`EnableCookieEncryption` off, the Electron default). Turning it on depends on the Keychain, and with unsigned/ad-hoc signed builds every new build triggers a Keychain permission prompt. If you sign with a real Developer ID, enabling it is recommended (the existing session is reset once when you do). The profile folder is only accessible to your user account; FileVault is recommended.
+- **Cookie encryption** (`EnableCookieEncryption` fuse) is on in packaged builds: the cookie store is encrypted with a key kept in the macOS Keychain ("ChatGPT Tabs Safe Storage") or Windows DPAPI. Ad-hoc signed Mac builds (self-built with `npm run package`) may show a Keychain prompt after each rebuild; choose **Always Allow**. Development runs (`npm run dev`) use unencrypted cookies in a separate profile.
 - **Google/Microsoft/Apple sign-in** may occasionally restrict embedded browsers again. If that happens, use ChatGPT email + password sign-in or the "Log in" button inside a tab.
 - **Under automation** (`navigator.webdriver = true`) ChatGPT redirects signed-out users straight to Google sign-in, which is why the E2E tests use a stub page. This does not happen in normal use (verified in the package smoke test).
 - **Inactive tabs** are subject to Chromium's background throttling: a streaming answer keeps going, but the screen updates when you switch back to the tab. Each tab is a separate renderer process, so memory use grows with the number of tabs; a maximum of 50 tabs can be open as a safeguard.
@@ -370,7 +393,7 @@ Signing in with a real ChatGPT account is intentionally not automated. Manual sm
 | Tab shows "ChatGPT could not be loaded" | Check your internet connection and press **Retry** |
 | "This tab stopped working" | Press **Reload tab** |
 | Tabs still look signed out after login | Reload the tab with `⌘R`; if that fails, Settings → Clear ChatGPT Session → sign in again |
-| macOS: "ChatGPT Tabs is damaged / cannot be opened" | The download is quarantined: `xattr -dr com.apple.quarantine "/Applications/ChatGPT Tabs.app"` |
+| macOS: "ChatGPT Tabs is damaged / cannot be opened" | You are running an ad-hoc signed build that was not downloaded from Releases. Use the notarized DMG from Releases, or (for your own build) `xattr -dr com.apple.quarantine "/Applications/ChatGPT Tabs.app"` |
 | Windows: "Windows protected your PC" | Unsigned build: **More info → Run anyway** (verify the SHA-256 first) |
 | The app does not open a second time | Single-instance lock: the existing window comes to the front |
 | Need verbose logs | macOS: `CHATGPT_TABS_DEBUG=1 "/Applications/ChatGPT Tabs.app/Contents/MacOS/ChatGPT Tabs"`; Windows (PowerShell): `$env:CHATGPT_TABS_DEBUG=1; & "$env:LOCALAPPDATA\Programs\ChatGPT Tabs\ChatGPT Tabs.exe"` (no sensitive data is logged) |

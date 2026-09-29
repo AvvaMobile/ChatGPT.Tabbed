@@ -1,5 +1,5 @@
 import { app, BrowserWindow, Menu, session } from 'electron'
-import { resolve } from 'node:path'
+import { join, resolve } from 'node:path'
 import { AppController } from './AppController'
 import { registerIpc } from './ipc/registerIpc'
 import { createLogger } from './logger'
@@ -11,7 +11,13 @@ const log = createLogger('main')
 // Optional separate profile directory (useful for automated tests or a second profile).
 // Must be applied before the app is ready.
 const customUserData = process.env.CHATGPT_TABS_USER_DATA_DIR
-if (customUserData) app.setPath('userData', resolve(customUserData))
+if (customUserData) {
+  app.setPath('userData', resolve(customUserData))
+} else if (!app.isPackaged) {
+  // Development runs keep their own profile so they never touch the (encrypted) cookies of the
+  // installed app.
+  app.setPath('userData', join(app.getPath('appData'), `${app.getName()} Dev`))
+}
 
 if (!app.requestSingleInstanceLock()) {
   // Another instance owns the persistent session; hand over to it.
