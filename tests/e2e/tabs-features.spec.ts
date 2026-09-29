@@ -99,6 +99,8 @@ test.describe('restoring tabs', () => {
       await expect(ui.getByTestId('tab').first()).toHaveAttribute('data-title', 'Stub /c/conversation-2')
       await ui.getByTestId('new-tab').click()
       await expect(ui.getByTestId('tab')).toHaveCount(2)
+      // Wait for the page's own title so it is part of the saved state.
+      await expect(ui.getByTestId('tab').nth(1)).toHaveAttribute('data-title', 'Stub /')
       await ui.getByTestId('tab').nth(1).dblclick()
       await ui.getByTestId('tab-name-input').fill('Pinned')
       await ui.getByTestId('tab-name-input').press('Enter')
