@@ -94,7 +94,13 @@ export async function getUiPage(app: ElectronApplication): Promise<Page> {
 export async function getTabPage(app: ElectronApplication, path: string): Promise<Page> {
   const target = `https://chatgpt.com${path}`
   await expect.poll(() => app.windows().some((p) => p.url() === target)).toBe(true)
-  return app.windows().find((p) => p.url() === target) as Page
+  const page = app.windows().find((p) => p.url() === target) as Page
+  await page.waitForLoadState('load')
+  // Wait until the document is scriptable (slow CI machines can still be swapping contexts).
+  await expect(async () => {
+    expect(await page.evaluate(() => document.readyState)).toBe('complete')
+  }).toPass()
+  return page
 }
 
 export async function clickMenu(app: ElectronApplication, label: string): Promise<void> {

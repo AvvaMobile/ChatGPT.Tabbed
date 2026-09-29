@@ -14,7 +14,7 @@ A **Chrome-style tabbed** desktop client for the ChatGPT web app (Electron + Typ
 
 ## Download
 
-**➡️ [Download the latest release](https://github.com/AvvaMobile/ChatGPT.Tabbed/releases/latest)**
+**➡️ [Download the latest release](https://github.com/AvvaMobile/ChatGPT.Tabbed/releases/latest)** · [Website](https://avvamobile.github.io/ChatGPT.Tabbed/)
 
 | Platform | File | Notes |
 | --- | --- | --- |
@@ -156,6 +156,7 @@ Releases are built by GitHub Actions on real macOS and Windows machines, so nobo
 
 - `.github/workflows/ci.yml` runs lint, typecheck, unit and E2E tests on macOS and Windows for every push and pull request.
 - `.github/workflows/release.yml` builds and smoke-tests the packages on both systems and publishes them.
+- `.github/workflows/pages.yml` publishes the one-page website in `site/` to GitHub Pages whenever it changes.
 
 Steps for a maintainer:
 

@@ -297,7 +297,9 @@ test('clear session removes cookies and storage and resets tabs', async () => {
     dialog.showMessageBox = (async () => ({ response: 0, checkboxChecked: false })) as typeof dialog.showMessageBox
   })
   const first = await getTabPage(app, '/')
-  await first.evaluate(() => localStorage.setItem('probe', '1'))
+  await expect(async () => {
+    await first.evaluate(() => localStorage.setItem('probe', '1'))
+  }).toPass()
   await first.click('#conv')
 
   await ui.getByTestId('settings-button').click()
