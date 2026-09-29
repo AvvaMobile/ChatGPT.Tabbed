@@ -98,13 +98,13 @@ test('new tabs start clean, switching preserves per-tab navigation state', async
   // Tab 1 navigates to a conversation.
   const first = await getTabPage(app, '/')
   await first.click('#conv')
-  await expect(tabs.nth(0)).toHaveAttribute('title', 'Stub /c/conversation-2')
+  await expect(tabs.nth(0)).toHaveAttribute('data-title', 'Stub /c/conversation-2')
 
   // New tab does not clone the active URL.
   await ui.getByTestId('new-tab').click()
   await expect(tabs).toHaveCount(2)
   await expect(tabs.nth(1)).toHaveAttribute('data-active', 'true')
-  await expect(tabs.nth(1)).toHaveAttribute('title', 'Stub /')
+  await expect(tabs.nth(1)).toHaveAttribute('data-title', 'Stub /')
   const [viewAfterNew] = await attachedViews(app)
   expect(viewAfterNew.url).toBe('https://chatgpt.com/')
 
@@ -124,8 +124,8 @@ test('new tabs start clean, switching preserves per-tab navigation state', async
   // Back/forward controls act on the active tab only.
   await tabs.nth(0).click()
   await ui.getByRole('button', { name: 'Back' }).click()
-  await expect(tabs.nth(0)).toHaveAttribute('title', 'Stub /')
-  await expect(tabs.nth(1)).toHaveAttribute('title', 'Stub /')
+  await expect(tabs.nth(0)).toHaveAttribute('data-title', 'Stub /')
+  await expect(tabs.nth(1)).toHaveAttribute('data-title', 'Stub /')
 })
 
 test('menu shortcuts: new tab, select by number, next/previous, close', async () => {
@@ -221,7 +221,7 @@ test('settings screen opens, hides the ChatGPT view and shows session info', asy
 
   await ui.keyboard.press('Escape')
   await expect(ui.getByTestId('settings')).toHaveCount(0)
-  expect(await attachedViews(app)).toHaveLength(1)
+  await expect.poll(async () => (await attachedViews(app)).length).toBe(1)
 
   // Selecting a tab also leaves settings.
   await ui.getByTestId('settings-button').click()
@@ -338,7 +338,7 @@ test('external links open in the system browser; ChatGPT popups become tabs; fil
 
   await clickInTab(app, '#internal-new')
   await expect(ui.getByTestId('tab')).toHaveCount(2)
-  await expect(ui.getByTestId('tab').nth(1)).toHaveAttribute('title', 'Stub /c/opened')
+  await expect(ui.getByTestId('tab').nth(1)).toHaveAttribute('data-title', 'Stub /c/opened')
 
   // A navigation to an external site initiated by script is diverted too.
   await getTabPage(app, '/').then((p) => p.evaluate(() => (location.href = 'https://example.net/js')))
@@ -379,7 +379,7 @@ test('failed loads show an error state with a working retry', async () => {
   await ui.getByTestId('retry').click()
   await expect(ui.getByTestId('status-panel')).toHaveCount(0)
   await expect.poll(async () => (await attachedViews(app)).length).toBe(1)
-  await expect(ui.getByTestId('tab').first()).toHaveAttribute('title', 'Stub /')
+  await expect(ui.getByTestId('tab').first()).toHaveAttribute('data-title', 'Stub /')
 })
 
 test('a crashed tab offers recovery', async () => {
@@ -411,7 +411,7 @@ test('IPC rejects malformed input', async () => {
   expect(keys).not.toContain('send')
 })
 
-test('closing the window destroys every tab web contents; dock re-open creates a fresh tab', async () => {
+test('closing the window destroys every tab web contents; dock re-open brings the tabs back', async () => {
   test.skip(process.platform !== 'darwin', 'macOS keeps the app alive without windows')
   const { app, ui } = h
   await ui.getByTestId('new-tab').click()
@@ -424,7 +424,9 @@ test('closing the window destroys every tab web contents; dock re-open creates a
 
   await app.evaluate(({ app: electronApp }) => electronApp.emit('activate'))
   await expect.poll(() => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length)).toBe(1)
-  await expect.poll(() => tabContentsIds(app)).toHaveLength(1)
+  // Tabs are restored (restore is on by default); only the active one is loaded.
+  await expect.poll(() => tabContentsIds(app)).toHaveLength(3)
+  await expect.poll(async () => (await attachedViews(app)).length).toBe(1)
 })
 
 test.describe('persistence', () => {

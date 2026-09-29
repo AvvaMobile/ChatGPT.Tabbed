@@ -1,10 +1,46 @@
-import { useEffect, useRef, type MouseEvent } from 'react'
+import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
+import { MAX_TAB_NAME_LENGTH } from '@shared/constants'
 import type { AppState, TabInfo } from '@shared/ipc'
 import { BackIcon, ChatIcon, CloseIcon, ForwardIcon, PlusIcon, ReloadIcon, SettingsIcon } from './Icons'
 
 const api = window.chatgptTabs
 
-function Tab({ tab }: { tab: TabInfo }) {
+function TabNameEditor({ tab, onDone }: { tab: TabInfo; onDone: () => void }) {
+  const [value, setValue] = useState(tab.title)
+  const done = useRef(false)
+
+  const finish = (save: boolean) => {
+    if (done.current) return
+    done.current = true
+    if (save && value.trim() !== tab.title) void api.renameTab(tab.id, value.trim() || null)
+    onDone()
+  }
+
+  const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'Enter') finish(true)
+    if (event.key === 'Escape') finish(false)
+    event.stopPropagation()
+  }
+
+  return (
+    <input
+      className="tab__input"
+      data-testid="tab-name-input"
+      aria-label="Tab name"
+      value={value}
+      maxLength={MAX_TAB_NAME_LENGTH}
+      placeholder="Tab name"
+      autoFocus
+      onFocus={(event) => event.currentTarget.select()}
+      onChange={(event) => setValue(event.target.value)}
+      onKeyDown={onKeyDown}
+      onBlur={() => finish(true)}
+      onMouseDown={(event) => event.stopPropagation()}
+    />
+  )
+}
+
+function Tab({ tab, editing, onEdit }: { tab: TabInfo; editing: boolean; onEdit: (id: string | null) => void }) {
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -26,19 +62,28 @@ function Tab({ tab }: { tab: TabInfo }) {
   }
 
   const failed = tab.status === 'error' || tab.status === 'crashed'
+  const tooltip = tab.renamed ? `${tab.title} (renamed — double-click to edit)` : `${tab.title} (double-click to rename)`
 
   return (
     <div
       ref={ref}
       role="tab"
       aria-selected={tab.active}
-      title={tab.title}
+      title={tooltip}
+      aria-label={tab.title}
       data-testid="tab"
       data-tab-id={tab.id}
       data-active={tab.active}
       className={`tab${tab.active ? ' tab--active' : ''}`}
+      data-title={tab.title}
+      data-renamed={tab.renamed}
       onMouseDown={onMouseDown}
       onAuxClick={onAuxClick}
+      onDoubleClick={() => onEdit(tab.id)}
+      onContextMenu={(event) => {
+        event.preventDefault()
+        void api.showTabMenu(tab.id)
+      }}
     >
       <span className="tab__icon" aria-hidden>
         {tab.status === 'loading' ? (
@@ -49,7 +94,11 @@ function Tab({ tab }: { tab: TabInfo }) {
           <ChatIcon />
         )}
       </span>
-      <span className="tab__title">{tab.title}</span>
+      {editing ? (
+        <TabNameEditor tab={tab} onDone={() => onEdit(null)} />
+      ) : (
+        <span className="tab__title">{tab.title}</span>
+      )}
       <button
         type="button"
         className="tab__close"
@@ -66,6 +115,10 @@ function Tab({ tab }: { tab: TabInfo }) {
 
 export function TabBar({ state }: { state: AppState }) {
   const active = state.tabs.find((tab) => tab.active)
+  const [editingId, setEditingId] = useState<string | null>(null)
+
+  // "Rename Tab…" from the app menu or the tab's context menu.
+  useEffect(() => api.onBeginRename((id) => setEditingId(id)), [])
 
   return (
     <header className="topbar" data-fullscreen={state.fullscreen}>
@@ -105,7 +158,7 @@ export function TabBar({ state }: { state: AppState }) {
 
       <div className="tabs" role="tablist" aria-label="ChatGPT tabs">
         {state.tabs.map((tab) => (
-          <Tab key={tab.id} tab={tab} />
+          <Tab key={tab.id} tab={tab} editing={editingId === tab.id} onEdit={setEditingId} />
         ))}
         <button
           type="button"

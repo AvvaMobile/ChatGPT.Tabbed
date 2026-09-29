@@ -26,7 +26,18 @@ const api: RendererApi = {
   closeSettings: () => ipcRenderer.invoke(IpcChannel.CloseSettings),
   openLogin: () => ipcRenderer.invoke(IpcChannel.OpenLogin),
   getAuthStatus: () => ipcRenderer.invoke(IpcChannel.GetAuthStatus),
-  clearSession: () => ipcRenderer.invoke(IpcChannel.ClearSession)
+  clearSession: () => ipcRenderer.invoke(IpcChannel.ClearSession),
+  renameTab: (id, name) => ipcRenderer.invoke(IpcChannel.RenameTab, id, name),
+  showTabMenu: (id) => ipcRenderer.invoke(IpcChannel.ShowTabMenu, id),
+  onBeginRename: (listener) => {
+    const handler = (_event: IpcRendererEvent, id: string): void => listener(id)
+    ipcRenderer.on(IpcChannel.BeginRename, handler)
+    return () => {
+      ipcRenderer.removeListener(IpcChannel.BeginRename, handler)
+    }
+  },
+  getSettings: () => ipcRenderer.invoke(IpcChannel.GetSettings),
+  setSettings: (patch) => ipcRenderer.invoke(IpcChannel.SetSettings, patch)
 }
 
 contextBridge.exposeInMainWorld('chatgptTabs', api)

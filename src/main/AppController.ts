@@ -1,7 +1,16 @@
-import { app, dialog, nativeTheme, type BrowserWindow } from 'electron'
-import { IpcChannel, type AppInfo, type AppState, type ClearSessionResult } from '@shared/ipc'
+import { app, dialog, Menu, nativeTheme, type BrowserWindow } from 'electron'
+import {
+  IpcChannel,
+  type AppInfo,
+  type AppSettings,
+  type AppState,
+  type ClearSessionResult
+} from '@shared/ipc'
 import { LoginWindow } from './auth/LoginWindow'
 import { createLogger } from './logger'
+import type { SettingsStore } from './persistence/SettingsStore'
+import { buildTabSession } from './persistence/tabSession'
+import type { TabSessionStore } from './persistence/TabSessionStore'
 import type { ChatGptSession } from './session/chatgptSession'
 import { TabManager } from './tabs/TabManager'
 import { createMainWindow, updateWindowTheme } from './window/mainWindow'
@@ -21,7 +30,11 @@ export class AppController {
   private readonly login: LoginWindow
   private reloadAfterLogin = false
 
-  constructor(private readonly chatgpt: ChatGptSession) {
+  constructor(
+    private readonly chatgpt: ChatGptSession,
+    private readonly settings: SettingsStore,
+    private readonly tabSession: TabSessionStore
+  ) {
     this.login = new LoginWindow(chatgpt, () => currentPalette().content)
     this.login.on('signed-in', () => this.handleSignedIn())
     this.login.on('closed', () => {
@@ -38,7 +51,10 @@ export class AppController {
     return this.tabs
   }
 
-  /** Creates the shell window with one fresh ChatGPT tab (app start, macOS dock re-open). */
+  /**
+   * Creates the shell window (app start, macOS dock re-open) and either restores the previous
+   * tabs or opens one fresh ChatGPT tab.
+   */
   createWindow(): BrowserWindow {
     const win = createMainWindow()
     const tabs = new TabManager(win, () => currentPalette().content)
@@ -46,7 +62,10 @@ export class AppController {
     this.tabs = tabs
     this.settingsOpen = false
 
-    tabs.on('changed', () => this.scheduleStateUpdate())
+    tabs.on('changed', () => {
+      this.scheduleStateUpdate()
+      if (this.settings.get().restoreTabs) this.tabSession.schedule(() => this.currentTabSession(tabs))
+    })
 
     const relayout = (): void => tabs.updateLayout()
     win.on('resize', relayout)
@@ -63,6 +82,11 @@ export class AppController {
     win.webContents.on('did-finish-load', () => this.sendState())
     win.once('ready-to-show', () => win.show())
 
+    // Save the final layout before the tabs are torn down (window close and app quit).
+    win.on('close', () => {
+      if (this.settings.get().restoreTabs) this.tabSession.saveNow(this.currentTabSession(tabs))
+    })
+
     win.on('closed', () => {
       tabs.destroyAllTabs()
       if (this.tabs === tabs) this.tabs = null
@@ -71,8 +95,31 @@ export class AppController {
       log.info('main window closed, tabs destroyed')
     })
 
-    tabs.createTab()
+    this.openInitialTabs(tabs)
     return win
+  }
+
+  private openInitialTabs(tabs: TabManager): void {
+    const saved = this.settings.get().restoreTabs ? this.tabSession.load() : null
+    if (!saved) {
+      tabs.createTab()
+      return
+    }
+    log.info(`restoring ${saved.tabs.length} tab(s)`)
+    saved.tabs.forEach((tab, index) => {
+      tabs.createTab({
+        url: tab.url,
+        title: tab.title,
+        customTitle: tab.customTitle,
+        activate: index === saved.activeIndex,
+        lazy: index !== saved.activeIndex
+      })
+    })
+  }
+
+  private currentTabSession(tabs: TabManager) {
+    const { tabs: saved, activeIndex } = tabs.snapshot()
+    return buildTabSession(saved, activeIndex)
   }
 
   focusOrCreateWindow(): void {
@@ -153,6 +200,66 @@ export class AppController {
     this.tabs?.activateAdjacent(delta)
   }
 
+  renameTab(id: string, name: string | null): void {
+    this.tabs?.renameTab(id, name)
+  }
+
+  /** Asks the tab bar to show the inline name editor for a tab (default: the active tab). */
+  beginRename(id?: string): void {
+    const target = id ?? this.tabs?.getActiveId()
+    const win = this.mainWindow
+    if (!target || !win) return
+    this.setSettingsOpen(false)
+    win.webContents.focus()
+    win.webContents.send(IpcChannel.BeginRename, target)
+  }
+
+  duplicateTab(id: string): void {
+    const tab = this.tabs?.getTab(id)
+    if (!tab) return
+    const snapshot = tab.pendingUrl ?? tab.url
+    this.tabs?.createTab({ url: snapshot })
+  }
+
+  closeOtherTabs(id: string): void {
+    const tabs = this.tabs
+    if (!tabs?.getTab(id)) return
+    for (const info of tabs.listTabs()) {
+      if (info.id !== id) tabs.closeTab(info.id)
+    }
+    tabs.activateTab(id)
+  }
+
+  /** Native right-click menu for a tab in the tab bar. */
+  showTabMenu(id: string): void {
+    const win = this.mainWindow
+    const tab = this.tabs?.getTab(id)
+    if (!win || !tab) return
+    const total = this.tabs?.size ?? 0
+    Menu.buildFromTemplate([
+      { label: 'Rename Tab…', click: () => this.beginRename(id) },
+      { label: 'Reset Tab Name', enabled: tab.customTitle !== null, click: () => this.renameTab(id, null) },
+      { type: 'separator' },
+      { label: 'Reload Tab', click: () => this.reloadTab(id) },
+      { label: 'Duplicate Tab', click: () => this.duplicateTab(id) },
+      { type: 'separator' },
+      { label: 'Close Tab', click: () => this.closeTab(id) },
+      { label: 'Close Other Tabs', enabled: total > 1, click: () => this.closeOtherTabs(id) }
+    ]).popup({ window: win })
+  }
+
+  getSettings(): AppSettings {
+    return this.settings.get()
+  }
+
+  updateSettings(patch: unknown): AppSettings {
+    const next = this.settings.update(patch)
+    if (next.restoreTabs && this.tabs) this.tabSession.saveNow(this.currentTabSession(this.tabs))
+    // Turning restore off also forgets the saved tabs.
+    if (!next.restoreTabs) this.tabSession.clear()
+    return next
+  }
+
   toggleActiveTabDevTools(): void {
     this.tabs?.getActiveTab()?.view.webContents.toggleDevTools()
   }
@@ -195,6 +302,8 @@ export class AppController {
     this.reloadAfterLogin = false
     this.login.close()
     await this.chatgpt.clear()
+    // Saved tabs contain conversation links and names; forget them together with the session.
+    this.tabSession.clear()
     this.tabs?.resetAllToHome()
     this.scheduleStateUpdate()
     return { cleared: true }

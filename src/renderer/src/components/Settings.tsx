@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { AppInfo } from '@shared/ipc'
+import type { AppInfo, AppSettings } from '@shared/ipc'
 import { CloseIcon } from './Icons'
 
 const api = window.chatgptTabs
@@ -12,6 +12,7 @@ const SHORTCUTS: Array<[string, string]> = [
   [`${mod}R`, 'Reload tab'],
   [`${mod}1 … ${mod}8`, 'Go to tab 1–8'],
   [`${mod}9`, 'Go to last tab'],
+  [isMac ? '⌘⇧E' : 'Ctrl+Shift+E', 'Rename tab (or double-click it)'],
   ['Ctrl+Tab / Ctrl+Shift+Tab', 'Next / previous tab'],
   [isMac ? '⌘[ / ⌘]' : 'Alt+← / Alt+→', 'Back / forward'],
   [isMac ? '⌘,' : 'Ctrl+,', 'Settings']
@@ -24,6 +25,7 @@ export function Settings({ loginWindowOpen }: { loginWindowOpen: boolean }) {
   const [auth, setAuth] = useState<AuthState>('checking')
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
+  const [settings, setSettings] = useState<AppSettings | null>(null)
 
   const refreshAuth = useCallback(
     () => api.getAuthStatus().then((status) => setAuth(status.signedIn ? 'signed-in' : 'signed-out')),
@@ -32,7 +34,12 @@ export function Settings({ loginWindowOpen }: { loginWindowOpen: boolean }) {
 
   useEffect(() => {
     void api.getInfo().then(setInfo)
+    void api.getSettings().then(setSettings)
   }, [])
+
+  const onToggleRestore = async (restoreTabs: boolean) => {
+    setSettings(await api.setSettings({ restoreTabs }))
+  }
 
   // Re-check whenever the login window opens or closes.
   useEffect(() => {
@@ -99,6 +106,27 @@ export function Settings({ loginWindowOpen }: { loginWindowOpen: boolean }) {
               {message}
             </p>
           )}
+        </section>
+
+        <section className="card">
+          <h2>Tabs</h2>
+          <label className="toggle">
+            <span>
+              <strong>Reopen tabs when the app starts</strong>
+              <span className="muted">
+                Brings back your open chats, their order and any names you gave them. Only the chat links and tab
+                names are saved on this computer; clearing the ChatGPT session also removes them.
+              </span>
+            </span>
+            <input
+              type="checkbox"
+              role="switch"
+              data-testid="restore-tabs"
+              checked={settings?.restoreTabs ?? false}
+              disabled={!settings}
+              onChange={(event) => void onToggleRestore(event.target.checked)}
+            />
+          </label>
         </section>
 
         <section className="card">

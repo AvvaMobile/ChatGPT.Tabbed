@@ -23,7 +23,15 @@ export interface TabViewInfo {
  * chatgpt.com with a local stub page and records external-link opens instead of opening a browser.
  * No real ChatGPT account or network is needed.
  */
-export async function launchApp(userDataDir?: string): Promise<Harness> {
+export interface LaunchOptions {
+  /** Tabs expected right after start (more than one when a saved session is restored). */
+  expectTabs?: number
+  /** Point every tab at the stub start page (skip to inspect restored tabs as they are). */
+  resetToHome?: boolean
+}
+
+export async function launchApp(userDataDir?: string, options: LaunchOptions = {}): Promise<Harness> {
+  const { expectTabs = 1, resetToHome = true } = options
   const dir = userDataDir ?? mkdtempSync(join(tmpdir(), 'chatgpt-tabs-e2e-'))
   const app = await electron.launch({
     args: [projectRoot],
@@ -33,15 +41,17 @@ export async function launchApp(userDataDir?: string): Promise<Harness> {
   await installStubs(app)
 
   const ui = await getUiPage(app)
-  await expect(ui.getByTestId('tab')).toHaveCount(1)
-  // Point the first tab at the stub now that interception is active.
-  await app.evaluate(({ BrowserWindow, webContents }) => {
-    const windowIds = new Set(BrowserWindow.getAllWindows().map((w) => w.webContents.id))
-    for (const wc of webContents.getAllWebContents()) {
-      if (!windowIds.has(wc.id)) void wc.loadURL('https://chatgpt.com/')
-    }
-  })
-  await expect(ui.getByTestId('tab').first()).toHaveAttribute('title', 'Stub /')
+  await expect(ui.getByTestId('tab')).toHaveCount(expectTabs)
+  if (resetToHome) {
+    // Point the first tab at the stub now that interception is active.
+    await app.evaluate(({ BrowserWindow, webContents }) => {
+      const windowIds = new Set(BrowserWindow.getAllWindows().map((w) => w.webContents.id))
+      for (const wc of webContents.getAllWebContents()) {
+        if (!windowIds.has(wc.id)) void wc.loadURL('https://chatgpt.com/')
+      }
+    })
+    await expect(ui.getByTestId('tab').first()).toHaveAttribute('data-title', 'Stub /')
+  }
 
   return {
     app,

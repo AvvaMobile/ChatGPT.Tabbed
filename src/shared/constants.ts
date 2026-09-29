@@ -18,3 +18,6 @@ export const DEFAULT_TAB_TITLE = 'New Chat'
 
 /** Upper bound on simultaneously open tabs; protects memory from runaway window.open loops. */
 export const MAX_TABS = 50
+
+/** Longest custom tab name accepted. */
+export const MAX_TAB_NAME_LENGTH = 80

@@ -4,6 +4,8 @@ import { AppController } from './AppController'
 import { registerIpc } from './ipc/registerIpc'
 import { createLogger } from './logger'
 import { buildApplicationMenu } from './menu'
+import { SettingsStore } from './persistence/SettingsStore'
+import { TabSessionStore } from './persistence/TabSessionStore'
 import { ChatGptSession } from './session/chatgptSession'
 
 const log = createLogger('main')
@@ -28,7 +30,7 @@ if (!app.requestSingleInstanceLock()) {
 
 function start(): void {
   const chatgpt = new ChatGptSession()
-  const controller = new AppController(chatgpt)
+  const controller = new AppController(chatgpt, new SettingsStore(), new TabSessionStore())
   let sessionFlushed = false
 
   app.on('second-instance', () => controller.focusOrCreateWindow())

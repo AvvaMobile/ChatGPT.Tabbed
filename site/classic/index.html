@@ -1,0 +1,601 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ChatGPT Tabs</title>
+<meta name="description" content="A tabbed desktop app for ChatGPT on macOS and Windows. Keep several conversations open side by side with one sign-in.">
+<meta property="og:title" content="ChatGPT Tabs">
+<meta property="og:description" content="A tabbed desktop app for ChatGPT on macOS and Windows. Several conversations, one sign-in.">
+<meta property="og:image" content="../icon.png">
+<link rel="icon" type="image/png" href="../favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #ffffff;
+    --side: #f9f9f9;
+    --text: #0d0d0d;
+    --muted: #5d5d5d;
+    --bubble: #f4f4f4;
+    --line: #e5e5e5;
+    --hover: #ececec;
+    --inverse: #0d0d0d;
+    --on-inverse: #ffffff;
+    --code: #f7f7f8;
+    --brand: #10a37f;
+    --window: #eceef1;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #212121;
+      --side: #171717;
+      --text: #ececec;
+      --muted: #b4b4b4;
+      --bubble: #303030;
+      --line: #383838;
+      --hover: #2f2f2f;
+      --inverse: #ffffff;
+      --on-inverse: #0d0d0d;
+      --code: #171717;
+      --window: #171717;
+      color-scheme: dark;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; scroll-padding-top: 72px; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 16px/1.65 Geist, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: inherit; }
+  :focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; border-radius: 6px; }
+  code, kbd, pre { font-family: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+  /* ---- shell: sidebar + conversation ------------------------------------ */
+  .shell { display: grid; grid-template-columns: 260px 1fr; min-height: 100vh; }
+  .side {
+    position: sticky; top: 0; height: 100vh;
+    background: var(--side);
+    padding: 12px 10px;
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; padding: 8px 10px 14px; text-decoration: none; font-weight: 600; }
+  .brand img { width: 28px; height: 28px; }
+  .side-title { font-size: 12px; color: var(--muted); padding: 14px 10px 4px; margin: 0; font-weight: 500; }
+  .side a.item {
+    display: block; padding: 7px 10px; border-radius: 8px;
+    text-decoration: none; font-size: 14px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .side a.item:hover, .side a.item[aria-current="true"] { background: var(--hover); }
+  .side-foot { margin-top: auto; padding: 10px; font-size: 13px; color: var(--muted); }
+  .side-foot a { display: flex; align-items: center; gap: 8px; text-decoration: none; padding: 8px 0; color: var(--text); }
+
+  .main { min-width: 0; display: flex; flex-direction: column; }
+  .topbar {
+    position: sticky; top: 0; z-index: 5;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 20px; background: var(--bg);
+  }
+  .model { font-size: 18px; font-weight: 500; display: flex; align-items: center; gap: 6px; }
+  .model span { color: var(--muted); }
+  .topbar .mobile-brand { display: none; }
+
+  .thread { width: 100%; max-width: 768px; margin: 0 auto; padding: 8px 24px 180px; }
+  .turn { padding: 18px 0; }
+  .user { display: flex; justify-content: flex-end; }
+  .user p {
+    margin: 0; max-width: 75%;
+    background: var(--bubble); border-radius: 22px; padding: 10px 18px;
+  }
+  .assistant { display: grid; grid-template-columns: 32px 1fr; gap: 16px; }
+  .avatar { width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--line); display: grid; place-items: center; background: var(--bg); }
+  .avatar img { width: 22px; height: 22px; }
+  .answer { min-width: 0; }
+  .answer > :first-child { margin-top: 4px; }
+  .answer h1 { font-size: 32px; line-height: 1.2; letter-spacing: -0.02em; font-weight: 600; margin: 0 0 14px; }
+  .answer h2 { font-size: 20px; font-weight: 600; margin: 28px 0 8px; }
+  .answer h3 { font-size: 16px; font-weight: 600; margin: 22px 0 6px; }
+  .answer p, .answer li { max-width: 68ch; }
+  .answer ul, .answer ol { padding-left: 22px; }
+  .answer li { margin: 6px 0; }
+  .answer li::marker { color: var(--muted); }
+  .answer strong { font-weight: 600; }
+  .answer :not(pre) > code { background: var(--bubble); padding: 1px 6px; border-radius: 6px; font-size: 0.88em; }
+  hr { border: 0; border-top: 1px solid var(--line); margin: 8px 0; }
+
+  pre {
+    background: var(--code); border: 1px solid var(--line); border-radius: 14px;
+    padding: 0; overflow: hidden; margin: 14px 0; font-size: 14px;
+  }
+  pre .bar { display: flex; justify-content: space-between; align-items: center; padding: 8px 14px; font-size: 12px; color: var(--muted); border-bottom: 1px solid var(--line); font-family: Geist, system-ui, sans-serif; }
+  pre .bar button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; padding: 2px 6px; border-radius: 6px; }
+  pre .bar button:hover { background: var(--hover); color: var(--text); }
+  pre code { display: block; padding: 14px 16px; overflow-x: auto; line-height: 1.7; }
+
+  table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 15px; }
+  th, td { text-align: left; padding: 9px 12px 9px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-weight: 600; }
+  kbd { font-size: 13px; padding: 1px 7px; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 6px; background: var(--bg); white-space: nowrap; }
+
+  .actions { display: flex; flex-wrap: wrap; gap: 10px; margin: 18px 0 6px; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 10px 18px; border-radius: 999px; text-decoration: none; font-weight: 500; font-size: 15px;
+    border: 1px solid var(--line); background: var(--bg);
+  }
+  .btn:hover { background: var(--hover); }
+  .btn.primary { background: var(--inverse); color: var(--on-inverse); border-color: var(--inverse); }
+  .btn.primary:hover { opacity: 0.85; }
+  .btn svg { width: 18px; height: 18px; }
+  .fine { font-size: 14px; color: var(--muted); }
+
+
+  /* ---- the interactive app window --------------------------------------- */
+  .window {
+    margin: 22px 0 8px; border-radius: 14px; overflow: hidden;
+    border: 1px solid var(--line);
+    box-shadow: 0 24px 60px -24px rgba(0, 0, 0, 0.35);
+    background: var(--bg);
+  }
+  .win-bar {
+    display: flex; align-items: center; gap: 6px; height: 42px; padding: 0 10px;
+    background: var(--window); border-bottom: 1px solid var(--line);
+  }
+  .lights { display: flex; gap: 8px; margin-right: 12px; }
+  .lights i { width: 12px; height: 12px; border-radius: 50%; display: block; }
+  .lights i:nth-child(1) { background: #ff5f57; }
+  .lights i:nth-child(2) { background: #febc2e; }
+  .lights i:nth-child(3) { background: #28c840; }
+  .win-tabs { display: flex; gap: 2px; flex: 1; min-width: 0; overflow: hidden; }
+  .win-tab {
+    display: flex; align-items: center; gap: 8px; min-width: 0; flex: 0 1 190px;
+    height: 30px; padding: 0 8px 0 10px; border-radius: 8px;
+    border: 0; background: transparent; color: var(--muted); font: 13px Geist, system-ui, sans-serif; cursor: pointer; text-align: left;
+  }
+  .win-tab span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; flex: 1; }
+  .win-tab:hover { background: var(--hover); }
+  .win-tab[aria-selected="true"] { background: var(--bg); color: var(--text); box-shadow: 0 0 0 1px var(--line); }
+  .win-tab .x { opacity: 0; font-size: 14px; line-height: 1; }
+  .win-tab[aria-selected="true"] .x, .win-tab:hover .x { opacity: 0.6; }
+  .win-add { border: 0; background: none; color: var(--muted); font-size: 20px; width: 30px; height: 30px; border-radius: 8px; cursor: pointer; flex: none; }
+  .win-add:hover { background: var(--hover); color: var(--text); }
+  .win-body { display: grid; grid-template-columns: 150px 1fr; height: 250px; }
+  .win-side { background: var(--side); padding: 12px 8px; font-size: 12px; color: var(--muted); display: flex; flex-direction: column; gap: 2px; }
+  .win-side b { color: var(--text); font-weight: 500; padding: 5px 8px; border-radius: 6px; }
+  .win-side div { padding: 5px 8px; border-radius: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .win-side .on { background: var(--hover); color: var(--text); }
+  .win-chat { padding: 18px 22px; display: flex; flex-direction: column; gap: 12px; font-size: 13px; overflow: hidden; }
+  .win-chat .q { align-self: flex-end; background: var(--bubble); border-radius: 16px; padding: 7px 13px; max-width: 80%; }
+  .win-chat .a { max-width: 92%; color: var(--text); }
+  .win-chat .a .line { height: 8px; border-radius: 4px; background: var(--hover); margin: 7px 0; }
+  .win-compose { margin-top: auto; border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px; color: var(--muted); font-size: 12px; }
+  .win-caption { font-size: 14px; color: var(--muted); margin: 0 0 4px; }
+  .win-panel[hidden] { display: none; }
+
+  /* ---- composer ---------------------------------------------------------- */
+  .composer-wrap {
+    position: fixed; bottom: 0; left: 260px; right: 0; z-index: 4;
+    background: linear-gradient(to bottom, transparent, var(--bg) 28%);
+    padding: 26px 24px 14px;
+  }
+  .composer { max-width: 768px; margin: 0 auto; }
+  .chips { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 10px; scrollbar-width: none; }
+  .chips::-webkit-scrollbar { display: none; }
+  .chips a {
+    flex: none; font-size: 14px; padding: 7px 14px; border: 1px solid var(--line); border-radius: 999px;
+    text-decoration: none; background: var(--bg); color: var(--muted);
+  }
+  .chips a:hover { color: var(--text); background: var(--hover); }
+  .pill {
+    display: flex; align-items: center; gap: 12px;
+    border: 1px solid var(--line); border-radius: 28px; background: var(--bg);
+    padding: 10px 10px 10px 20px; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+  }
+  .pill > span { flex: 1; color: var(--muted); }
+  .pill a {
+    width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center;
+    background: var(--inverse); color: var(--on-inverse);
+  }
+  .pill a svg { width: 18px; height: 18px; }
+  .disclaimer { text-align: center; font-size: 12px; color: var(--muted); margin: 8px 0 0; }
+
+  /* ---- responsive -------------------------------------------------------- */
+  @media (max-width: 900px) {
+    .shell { grid-template-columns: 1fr; }
+    .side { display: none; }
+    .composer-wrap { left: 0; padding-left: 16px; padding-right: 16px; }
+    .topbar .mobile-brand { display: flex; }
+    .topbar .model { display: none; }
+    .thread { padding-left: 16px; padding-right: 16px; }
+    .assistant { grid-template-columns: 1fr; gap: 8px; }
+    .avatar { display: none; }
+    .answer h1 { font-size: 27px; }
+    .user p { max-width: 88%; }
+    .win-body { grid-template-columns: 1fr; height: 240px; }
+    .win-side { display: none; }
+    .win-tab { flex: 1 1 0; padding: 0 6px; }
+    .win-tab .x { display: none; }
+    .lights { margin-right: 4px; }
+    .chips { display: none; }
+    .pill .long { display: none; }
+    th, td { font-size: 14px; }
+  }
+</style>
+</head>
+<body>
+<div class="shell">
+  <nav class="side" aria-label="Sections">
+    <a class="brand" href="#top"><img src="../icon.png" alt="" width="28" height="28">ChatGPT Tabs</a>
+    <p class="side-title">Today</p>
+    <a class="item" href="#what">What is ChatGPT Tabs?</a>
+    <a class="item" href="#tabs">Several chats at once</a>
+    <a class="item" href="#install">Download and install</a>
+    <a class="item" href="#signin">Signing in</a>
+    <a class="item" href="#security">Security and privacy</a>
+    <a class="item" href="#shortcuts">Keyboard shortcuts</a>
+    <a class="item" href="#build">Build it yourself</a>
+    <a class="item" href="#limits">What it doesn't do</a>
+    <div class="side-foot">
+      <a href="https://github.com/AvvaMobile/ChatGPT.Tabbed">
+        <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+        Source on GitHub
+      </a>
+      Open source. No tracking.
+    </div>
+  </nav>
+
+  <div class="main" id="top">
+    <header class="topbar">
+      <div class="model">ChatGPT Tabs <span>1.0</span></div>
+      <a class="brand mobile-brand" href="#top"><img src="../icon.png" alt="" width="26" height="26">ChatGPT Tabs</a>
+      <a class="btn primary" href="https://github.com/AvvaMobile/ChatGPT.Tabbed/releases/latest">Download</a>
+    </header>
+
+    <main class="thread">
+      <!-- What -->
+      <section class="turn" id="what" aria-labelledby="q-what">
+        <div class="user"><p id="q-what">What is ChatGPT Tabs?</p></div>
+      </section>
+      <section class="turn">
+        <div class="assistant">
+          <div class="avatar"><img src="../icon.png" alt=""></div>
+          <div class="answer">
+            <h1>ChatGPT, with tabs.</h1>
+            <p>ChatGPT Tabs is a desktop app for macOS and Windows that works like a browser built only for ChatGPT. Open a new tab for every topic, switch between them instantly, and stay signed in to the same account in all of them.</p>
+
+            <div class="window" role="group" aria-label="Preview of the app. Select a tab to switch conversations.">
+              <div class="win-bar">
+                <div class="lights" aria-hidden="true"><i></i><i></i><i></i></div>
+                <div class="win-tabs" role="tablist" aria-label="Open chats">
+                  <button class="win-tab" role="tab" aria-selected="true" aria-controls="p1" id="t1"><span>Trip to Lisbon</span><b class="x" aria-hidden="true">×</b></button>
+                  <button class="win-tab" role="tab" aria-selected="false" aria-controls="p2" id="t2" tabindex="-1"><span>Fix my SQL query</span><b class="x" aria-hidden="true">×</b></button>
+                  <button class="win-tab" role="tab" aria-selected="false" aria-controls="p3" id="t3" tabindex="-1"><span>Cover letter draft</span><b class="x" aria-hidden="true">×</b></button>
+                </div>
+                <button class="win-add" aria-label="New tab (preview)" title="New tab" id="add">+</button>
+              </div>
+              <div class="win-body">
+                <div class="win-side" aria-hidden="true">
+                  <b>New chat</b>
+                  <div data-for="p1" class="on">Trip to Lisbon</div>
+                  <div data-for="p2">Fix my SQL query</div>
+                  <div data-for="p3">Cover letter draft</div>
+                  <div>Birthday ideas</div>
+                  <div>Explain transformers</div>
+                </div>
+                <div>
+                  <div class="win-chat win-panel" role="tabpanel" id="p1" aria-labelledby="t1">
+                    <div class="q">Plan three relaxed days in Lisbon in October.</div>
+                    <div class="a">Day 1 — Alfama and the castle in the morning, a long lunch by the river…<div class="line" style="width:92%"></div><div class="line" style="width:78%"></div></div>
+                    <div class="win-compose">Message ChatGPT</div>
+                  </div>
+                  <div class="win-chat win-panel" role="tabpanel" id="p2" aria-labelledby="t2" hidden>
+                    <div class="q">Why does this JOIN return duplicate rows?</div>
+                    <div class="a">Each order matches several shipment rows. Aggregate the shipments first…<div class="line" style="width:86%"></div><div class="line" style="width:64%"></div></div>
+                    <div class="win-compose">Message ChatGPT</div>
+                  </div>
+                  <div class="win-chat win-panel" role="tabpanel" id="p3" aria-labelledby="t3" hidden>
+                    <div class="q">Make my cover letter shorter and more direct.</div>
+                    <div class="a">Here is a version at about 180 words that leads with your strongest project…<div class="line" style="width:90%"></div><div class="line" style="width:70%"></div></div>
+                    <div class="win-compose">Message ChatGPT</div>
+                  </div>
+                  <div class="win-chat win-panel" role="tabpanel" id="p4" aria-labelledby="t4" hidden>
+                    <div class="a" style="margin:auto; text-align:center; font-size:18px; font-weight:500;">What can I help with?</div>
+                    <div class="win-compose">Message ChatGPT</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <p class="win-caption">Try it: click the tabs, or press + to open a new chat.</p>
+
+            <div class="actions" id="downloads">
+              <a class="btn primary" data-os="mac" href="https://github.com/AvvaMobile/ChatGPT.Tabbed/releases/latest">
+                <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16.37 12.6c-.02-2.2 1.8-3.26 1.88-3.31-1.02-1.5-2.62-1.7-3.19-1.72-1.36-.14-2.65.8-3.34.8-.69 0-1.75-.78-2.88-.76-1.48.02-2.85.86-3.61 2.19-1.54 2.67-.39 6.62 1.11 8.79.73 1.06 1.61 2.25 2.75 2.2 1.1-.04 1.52-.71 2.86-.71 1.33 0 1.71.71 2.88.69 1.19-.02 1.94-1.08 2.67-2.14.84-1.23 1.19-2.42 1.21-2.48-.03-.01-2.32-.89-2.34-3.55zM14.18 6.13c.61-.74 1.02-1.76.91-2.78-.88.04-1.94.59-2.57 1.32-.56.65-1.06 1.69-.93 2.69.98.08 1.98-.5 2.59-1.23z"/></svg>
+                Download for macOS
+              </a>
+              <a class="btn" data-os="win" href="https://github.com/AvvaMobile/ChatGPT.Tabbed/releases/latest">
+                <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 5.5l7.5-1v7.2H3zm0 13l7.5 1v-7.1H3zm8.4 1.1L21 21v-8.6h-9.6zm0-15.2v7.3H21V3z"/></svg>
+                Download for Windows
+              </a>
+            </div>
+            <p class="fine">Free and open source. macOS 12+ (Apple Silicon and Intel), Windows 10 and 11. Not affiliated with OpenAI.</p>
+
+          </div>
+        </div>
+      </section>
+
+      <!-- Tabs -->
+      <section class="turn" id="tabs">
+        <div class="user"><p>Can I really keep several chats open at the same time?</p></div>
+      </section>
+      <section class="turn">
+        <div class="assistant">
+          <div class="avatar"><img src="../icon.png" alt=""></div>
+          <div class="answer">
+            <p>Yes. Every tab is its own ChatGPT window with its own history, so a long answer can keep writing in one tab while you work in another.</p>
+            <ul>
+              <li><strong>New tabs start fresh.</strong> They open on a new chat, never a copy of the tab you were in.</li>
+              <li><strong>Switching is instant.</strong> Tabs in the background stay loaded, so you come back exactly where you left off.</li>
+              <li><strong>One sign-in for all tabs.</strong> Log in once and every tab, and every future launch, uses the same account.</li>
+              <li><strong>Everything from ChatGPT still works:</strong> the sidebar and chat history, model picker, settings, file and image uploads, drag and drop, voice, code blocks and downloads.</li>
+              <li><strong>It isn't a browser.</strong> There is no address bar. Links to other websites open in your normal browser.</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- Install -->
+      <section class="turn" id="install">
+        <div class="user"><p>How do I install it?</p></div>
+      </section>
+      <section class="turn">
+        <div class="assistant">
+          <div class="avatar"><img src="../icon.png" alt=""></div>
+          <div class="answer">
+            <p>Get the file for your computer from the <a href="https://github.com/AvvaMobile/ChatGPT.Tabbed/releases/latest">latest release</a>.</p>
+            <table>
+              <thead><tr><th>Your computer</th><th>File to download</th></tr></thead>
+              <tbody>
+                <tr><td>Mac with Apple chip (M1 and newer)</td><td><code>…-mac-arm64.dmg</code></td></tr>
+                <tr><td>Mac with Intel processor</td><td><code>…-mac-x64.dmg</code></td></tr>
+                <tr><td>Windows 10 or 11</td><td><code>…-win-x64-setup.exe</code></td></tr>
+                <tr><td>Windows, without installing</td><td><code>…-win-x64-portable.zip</code></td></tr>
+              </tbody>
+            </table>
+            <h3>macOS</h3>
+            <p>Open the <code>.dmg</code> and drag ChatGPT Tabs into Applications. The app is signed and notarized by Apple, so it opens like any other app.</p>
+            <h3>Windows</h3>
+            <p>Run the installer. It installs for your user only and needs no admin rights. Windows may say “Windows protected your PC” because the installer isn't code-signed yet: choose <strong>More info</strong>, then <strong>Run anyway</strong>.</p>
+            <h3>Check the file (optional)</h3>
+            <p>Each release lists a SHA-256 checksum for every file in <code>SHA256SUMS.txt</code>. Compare it with yours:</p>
+            <pre><div class="bar"><span>Terminal (macOS)</span><button type="button" data-copy>Copy</button></div><code>shasum -a 256 ~/Downloads/ChatGPT-Tabs-*.dmg</code></pre>
+            <pre><div class="bar"><span>PowerShell (Windows)</span><button type="button" data-copy>Copy</button></div><code>Get-FileHash $env:USERPROFILE\Downloads\ChatGPT-Tabs-*-setup.exe</code></pre>
+          </div>
+        </div>
+      </section>
+
+      <!-- Sign in -->
+      <section class="turn" id="signin">
+        <div class="user"><p>How do I sign in?</p></div>
+      </section>
+      <section class="turn">
+        <div class="assistant">
+          <div class="avatar"><img src="../icon.png" alt=""></div>
+          <div class="answer">
+            <ol>
+              <li>Open the app and click the settings button in the top right corner.</li>
+              <li>Choose <strong>Open ChatGPT Login</strong> and sign in the way you always do: email, Google, Microsoft, Apple or your company's single sign-on.</li>
+              <li>The login window closes by itself and your tabs refresh. You stay signed in after restarting the app.</li>
+            </ol>
+            <p>To sign out everywhere, use <strong>Clear ChatGPT Session</strong> in the same settings screen. It removes ChatGPT's cookies and stored data from this computer. Your conversations stay in your ChatGPT account.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Security -->
+      <section class="turn" id="security">
+        <div class="user"><p>Is it safe? What happens to my password and my chats?</p></div>
+      </section>
+      <section class="turn">
+        <div class="assistant">
+          <div class="avatar"><img src="../icon.png" alt=""></div>
+          <div class="answer">
+            <p>The app shows the real ChatGPT website and stays out of the way.</p>
+            <ul>
+              <li><strong>Your password never touches the app.</strong> You type it into OpenAI's (or Google's, Microsoft's, Apple's) own sign-in page. The app keeps only the normal login cookie, encrypted on disk with your system keychain.</li>
+              <li><strong>No tracking.</strong> No analytics, no telemetry, no server of its own. The only traffic is ChatGPT itself and the sign-in provider you pick.</li>
+              <li><strong>Your chats are not read or changed.</strong> The app does not inject scripts into ChatGPT and sends nothing to third parties.</li>
+              <li><strong>Locked-down pages.</strong> ChatGPT runs sandboxed with no access to your files or system, and links to other sites open in your own browser.</li>
+              <li><strong>Hardened package.</strong> The macOS app is signed and notarized by Apple, and the app refuses to start if its code has been modified.</li>
+            </ul>
+            <p>The full security model is in the <a href="https://github.com/AvvaMobile/ChatGPT.Tabbed#security-model">README</a>, and all of the code is <a href="https://github.com/AvvaMobile/ChatGPT.Tabbed">on GitHub</a>.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Shortcuts -->
+      <section class="turn" id="shortcuts">
+        <div class="user"><p>What are the keyboard shortcuts?</p></div>
+      </section>
+      <section class="turn">
+        <div class="assistant">
+          <div class="avatar"><img src="../icon.png" alt=""></div>
+          <div class="answer">
+            <table>
+              <thead><tr><th>Action</th><th>macOS</th><th>Windows</th></tr></thead>
+              <tbody>
+                <tr><td>New tab</td><td><kbd>⌘T</kbd></td><td><kbd>Ctrl+T</kbd></td></tr>
+                <tr><td>Close tab</td><td><kbd>⌘W</kbd></td><td><kbd>Ctrl+W</kbd></td></tr>
+                <tr><td>Reload tab</td><td><kbd>⌘R</kbd></td><td><kbd>Ctrl+R</kbd></td></tr>
+                <tr><td>Go to tab 1–8</td><td><kbd>⌘1</kbd>–<kbd>⌘8</kbd></td><td><kbd>Ctrl+1</kbd>–<kbd>Ctrl+8</kbd></td></tr>
+                <tr><td>Go to last tab</td><td><kbd>⌘9</kbd></td><td><kbd>Ctrl+9</kbd></td></tr>
+                <tr><td>Next or previous tab</td><td><kbd>Ctrl+Tab</kbd></td><td><kbd>Ctrl+Tab</kbd></td></tr>
+                <tr><td>Back and forward</td><td><kbd>⌘[</kbd> <kbd>⌘]</kbd></td><td><kbd>Alt+←</kbd> <kbd>Alt+→</kbd></td></tr>
+                <tr><td>Settings</td><td><kbd>⌘,</kbd></td><td><kbd>Ctrl+,</kbd></td></tr>
+              </tbody>
+            </table>
+            <p class="fine">Closing the last tab opens a fresh one instead of quitting. Middle-click a tab to close it.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Build -->
+      <section class="turn" id="build">
+        <div class="user"><p>Can I build it myself?</p></div>
+      </section>
+      <section class="turn">
+        <div class="assistant">
+          <div class="avatar"><img src="../icon.png" alt=""></div>
+          <div class="answer">
+            <p>Sure. You need Node.js 20 or newer and Git. Build macOS packages on a Mac and Windows packages on Windows.</p>
+            <pre><div class="bar"><span>Terminal</span><button type="button" data-copy>Copy</button></div><code>git clone https://github.com/AvvaMobile/ChatGPT.Tabbed.git
+cd ChatGPT.Tabbed
+npm ci
+npm run dev            # try it without packaging
+npm run package        # macOS: .dmg files in release/
+npm run package:win    # Windows: installer and .zip in release\</code></pre>
+            <p>The <a href="https://github.com/AvvaMobile/ChatGPT.Tabbed#build-from-source">README</a> covers tests, signed macOS builds and how releases are published.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Limits -->
+      <section class="turn" id="limits">
+        <div class="user"><p>Is there anything it doesn't do?</p></div>
+      </section>
+      <section class="turn">
+        <div class="assistant">
+          <div class="avatar"><img src="../icon.png" alt=""></div>
+          <div class="answer">
+            <ul>
+              <li>It doesn't reopen your tabs after a restart. Each launch starts with one new chat, and older chats are in ChatGPT's sidebar.</li>
+              <li>It doesn't update itself. Download a new version from the releases page when one comes out.</li>
+              <li>It isn't an API client and doesn't use API keys. It uses your normal ChatGPT account and plan.</li>
+              <li>Each tab uses its own memory, like a browser tab. Dozens of open tabs will use more memory.</li>
+              <li>It's an independent project and isn't made or endorsed by OpenAI.</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <div class="composer-wrap">
+      <div class="composer">
+        <nav class="chips" aria-label="Suggested questions">
+          <a href="#install">How do I install it?</a>
+          <a href="#security">Is it safe?</a>
+          <a href="#shortcuts">Keyboard shortcuts</a>
+          <a href="#build">Build it myself</a>
+        </nav>
+        <div class="pill">
+          <span><span class="long">Ready to try it? </span>Download ChatGPT Tabs</span>
+          <a href="https://github.com/AvvaMobile/ChatGPT.Tabbed/releases/latest" aria-label="Download the latest release">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M6 13l6 6 6-6"/></svg>
+          </a>
+        </div>
+        <p class="disclaimer">ChatGPT Tabs is not affiliated with OpenAI. ChatGPT is a trademark of OpenAI.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Tab preview: switch conversations, open a "new chat", arrow-key navigation.
+  (function () {
+    var tablist = document.querySelector('.win-tabs');
+    var sideItems = document.querySelectorAll('.win-side [data-for]');
+
+    function select(tab) {
+      tablist.querySelectorAll('[role="tab"]').forEach(function (t) {
+        var on = t === tab;
+        t.setAttribute('aria-selected', String(on));
+        t.tabIndex = on ? 0 : -1;
+        var panel = document.getElementById(t.getAttribute('aria-controls'));
+        if (panel) panel.hidden = !on;
+      });
+      sideItems.forEach(function (el) {
+        el.classList.toggle('on', el.dataset.for === tab.getAttribute('aria-controls'));
+      });
+    }
+
+    tablist.addEventListener('click', function (e) {
+      var tab = e.target.closest('[role="tab"]');
+      if (tab) select(tab);
+    });
+    tablist.addEventListener('keydown', function (e) {
+      if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+      var tabs = Array.prototype.slice.call(tablist.querySelectorAll('[role="tab"]'));
+      var i = tabs.indexOf(document.activeElement);
+      if (i < 0) return;
+      var next = tabs[(i + (e.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length];
+      select(next);
+      next.focus();
+    });
+
+    document.getElementById('add').addEventListener('click', function () {
+      var existing = document.getElementById('t4');
+      if (!existing && tablist.children.length < 4) {
+        existing = document.createElement('button');
+        existing.className = 'win-tab';
+        existing.setAttribute('role', 'tab');
+        existing.id = 't4';
+        existing.setAttribute('aria-controls', 'p4');
+        existing.innerHTML = '<span>New Chat</span><b class="x" aria-hidden="true">×</b>';
+        tablist.appendChild(existing);
+      }
+      select(existing);
+    });
+  })();
+
+  // Highlight the download for the visitor's system.
+  (function () {
+    var ua = navigator.userAgent;
+    var isWin = /Windows/i.test(ua);
+    var mac = document.querySelector('[data-os="mac"]');
+    var win = document.querySelector('[data-os="win"]');
+    if (isWin) {
+      mac.classList.remove('primary');
+      win.classList.add('primary');
+      win.parentNode.insertBefore(win, mac);
+    }
+  })();
+
+  // Copy buttons on code blocks.
+  document.querySelectorAll('[data-copy]').forEach(function (button) {
+    button.addEventListener('click', function () {
+      var code = button.closest('pre').querySelector('code').innerText;
+      navigator.clipboard.writeText(code).then(function () {
+        button.textContent = 'Copied';
+        setTimeout(function () { button.textContent = 'Copy'; }, 1500);
+      });
+    });
+  });
+
+  // Mark the section in view in the sidebar.
+  (function () {
+    var links = Array.prototype.slice.call(document.querySelectorAll('.side a.item'));
+    if (!('IntersectionObserver' in window)) return;
+    var observer = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (!entry.isIntersecting) return;
+        links.forEach(function (link) {
+          link.setAttribute('aria-current', String(link.getAttribute('href') === '#' + entry.target.id));
+        });
+      });
+    }, { rootMargin: '-20% 0px -70% 0px' });
+    links.forEach(function (link) {
+      var target = document.querySelector(link.getAttribute('href'));
+      if (target) observer.observe(target);
+    });
+  })();
+</script>
+</body>
+</html>

@@ -13,7 +13,12 @@ export const IpcChannel = {
   CloseSettings: 'settings:close',
   OpenLogin: 'auth:open-login',
   GetAuthStatus: 'auth:get-status',
-  ClearSession: 'session:clear'
+  ClearSession: 'session:clear',
+  RenameTab: 'tabs:rename',
+  ShowTabMenu: 'tabs:show-menu',
+  BeginRename: 'tabs:begin-rename',
+  GetSettings: 'settings:get',
+  SetSettings: 'settings:set'
 } as const
 
 export type TabStatus = 'loading' | 'ready' | 'error' | 'crashed'
@@ -29,6 +34,8 @@ export interface TabInfo {
   /** Origin + path only; query strings/fragments are stripped before leaving the main process. */
   url: string
   active: boolean
+  /** True when the user gave the tab a custom name. */
+  renamed: boolean
   status: TabStatus
   error: TabError | null
   canGoBack: boolean
@@ -58,6 +65,11 @@ export interface AuthStatus {
   signedIn: boolean
 }
 
+export interface AppSettings {
+  /** Reopen the previous tabs (with their names) when the app starts. */
+  restoreTabs: boolean
+}
+
 export interface ClearSessionResult {
   cleared: boolean
 }
@@ -79,4 +91,10 @@ export interface RendererApi {
   openLogin(): Promise<void>
   getAuthStatus(): Promise<AuthStatus>
   clearSession(): Promise<ClearSessionResult>
+  /** Sets a custom tab name; an empty string or null restores the page title. */
+  renameTab(id: string, name: string | null): Promise<void>
+  showTabMenu(id: string): Promise<void>
+  onBeginRename(listener: (id: string) => void): () => void
+  getSettings(): Promise<AppSettings>
+  setSettings(patch: Partial<AppSettings>): Promise<AppSettings>
 }

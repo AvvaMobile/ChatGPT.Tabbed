@@ -1,5 +1,6 @@
 import { ipcMain, type IpcMainInvokeEvent } from 'electron'
 import { IpcChannel } from '@shared/ipc'
+import { MAX_TAB_NAME_LENGTH } from '@shared/constants'
 import { isTabId } from '@shared/validation'
 import type { AppController } from '../AppController'
 import { createLogger } from '../logger'
@@ -56,4 +57,13 @@ export function registerIpc(controller: AppController): void {
   handle(IpcChannel.OpenLogin, () => controller.openLogin())
   handle(IpcChannel.GetAuthStatus, async () => ({ signedIn: await controller.isSignedIn() }))
   handle(IpcChannel.ClearSession, () => controller.clearSession())
+  handle(IpcChannel.RenameTab, (id, name) => {
+    if (name !== null && (typeof name !== 'string' || name.length > MAX_TAB_NAME_LENGTH * 4)) {
+      throw new Error('Invalid tab name')
+    }
+    controller.renameTab(requireTabId(id), name)
+  })
+  handle(IpcChannel.ShowTabMenu, (id) => controller.showTabMenu(requireTabId(id)))
+  handle(IpcChannel.GetSettings, () => controller.getSettings())
+  handle(IpcChannel.SetSettings, (patch) => controller.updateSettings(patch))
 }

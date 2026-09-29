@@ -1,7 +1,9 @@
 import { EventEmitter } from 'node:events'
 import { WebContentsView, type BrowserWindow, type WebContents } from 'electron'
-import { CHATGPT_HOME_URL, CHATGPT_PARTITION, DEFAULT_TAB_TITLE, MAX_TABS } from '@shared/constants'
+import { CHATGPT_HOME_URL, CHATGPT_PARTITION, DEFAULT_TAB_TITLE, MAX_TAB_NAME_LENGTH, MAX_TABS } from '@shared/constants'
 import type { TabError, TabInfo, TabStatus } from '@shared/ipc'
+import { cleanTitle } from '@shared/validation'
+import { restorableUrl, type SavedTab } from '../persistence/tabSession'
 import { createLogger } from '../logger'
 import { isChatGptUrl, redactUrl } from '../security/navigationPolicy'
 import { applyNavigationPolicy } from '../security/webContentsPolicy'
@@ -17,8 +19,13 @@ const ERR_ABORTED = -3
 export interface Tab {
   id: string
   view: WebContentsView
-  title: string
+  /** Title reported by the page. */
+  pageTitle: string
+  /** Name given by the user; shown instead of the page title when set. */
+  customTitle: string | null
   url: string
+  /** Restored tabs load lazily: the URL is only opened when the tab is first shown. */
+  pendingUrl: string | null
   status: TabStatus
   error: TabError | null
   /** Last URL that should be retried after a failed load. */
@@ -28,6 +35,11 @@ export interface Tab {
 export interface CreateTabOptions {
   url?: string
   activate?: boolean
+  /** Initial page title (e.g. from a restored session) until the page reports its own. */
+  title?: string
+  customTitle?: string | null
+  /** Defer loading until the tab is activated. */
+  lazy?: boolean
 }
 
 interface TabManagerEvents {
@@ -83,12 +95,18 @@ export class TabManager extends EventEmitter<TabManagerEvents> {
     })
     view.setBackgroundColor(this.backgroundColor())
 
+    // A deferred tab never becomes active on its own: when restoring, the saved active tab is
+    // created explicitly with `activate: true`.
+    const lazy = options.lazy === true && options.activate === false
+    const activate = !lazy && (options.activate !== false || this.activeId === null)
     const tab: Tab = {
       id,
       view,
-      title: DEFAULT_TAB_TITLE,
+      pageTitle: options.title ? cleanTitle(options.title, 200) : '',
+      customTitle: options.customTitle ? cleanTitle(options.customTitle, MAX_TAB_NAME_LENGTH) || null : null,
       url,
-      status: 'loading',
+      pendingUrl: lazy ? url : null,
+      status: lazy ? 'ready' : 'loading',
       error: null,
       retryUrl: url
     }
@@ -96,12 +114,10 @@ export class TabManager extends EventEmitter<TabManagerEvents> {
     this.order.push(id)
     this.wireTab(tab)
 
-    log.info(`created ${id}`)
-    view.webContents.loadURL(url).catch(() => {
-      // Failures are reported through did-fail-load; nothing else to do here.
-    })
+    log.info(`created ${id}${lazy ? ' (deferred)' : ''}`)
+    if (!lazy) this.load(tab, url)
 
-    if (options.activate !== false || this.activeId === null) {
+    if (activate) {
       this.activateTab(id)
     } else {
       this.emitChanged()
@@ -113,6 +129,7 @@ export class TabManager extends EventEmitter<TabManagerEvents> {
     const tab = this.tabs.get(id)
     if (!tab || this.destroyed) return false
     this.activeId = id
+    if (tab.pendingUrl) this.load(tab, tab.pendingUrl)
     this.syncAttachedView()
     if (!this.contentHidden) this.focusActive()
     this.emitChanged()
@@ -152,7 +169,7 @@ export class TabManager extends EventEmitter<TabManagerEvents> {
     tab.status = 'loading'
     tab.error = null
     if (needsFreshLoad) {
-      contents.loadURL(tab.retryUrl || CHATGPT_HOME_URL).catch(() => undefined)
+      this.load(tab, tab.pendingUrl ?? (tab.retryUrl || CHATGPT_HOME_URL))
     } else if (ignoreCache) {
       contents.reloadIgnoringCache()
     } else {
@@ -163,8 +180,11 @@ export class TabManager extends EventEmitter<TabManagerEvents> {
     return true
   }
 
+  /** Reloads every loaded tab; deferred tabs pick up the new state when they are first shown. */
   reloadAll(): void {
-    for (const id of this.order) this.reloadTab(id)
+    for (const [id, tab] of this.tabs) {
+      if (!tab.pendingUrl) this.reloadTab(id)
+    }
   }
 
   /** Sends every tab back to the ChatGPT start page (used after logout/login changes). */
@@ -173,7 +193,9 @@ export class TabManager extends EventEmitter<TabManagerEvents> {
       tab.status = 'loading'
       tab.error = null
       tab.retryUrl = CHATGPT_HOME_URL
-      tab.view.webContents.loadURL(CHATGPT_HOME_URL).catch(() => undefined)
+      tab.pageTitle = ''
+      tab.customTitle = null
+      this.load(tab, CHATGPT_HOME_URL)
     }
     this.syncAttachedView()
     this.emitChanged()
@@ -224,9 +246,10 @@ export class TabManager extends EventEmitter<TabManagerEvents> {
       return [
         {
           id,
-          title: tab.title,
+          title: this.displayTitle(tab),
           url: redactUrl(tab.url),
           active: id === this.activeId,
+          renamed: tab.customTitle !== null,
           status: tab.status,
           error: tab.error,
           canGoBack: alive && contents.navigationHistory.canGoBack(),
@@ -236,14 +259,42 @@ export class TabManager extends EventEmitter<TabManagerEvents> {
     })
   }
 
+  /** Records the title reported by the page (shown unless the user renamed the tab). */
   updateTabTitle(id: string, title: string): void {
     const tab = this.tabs.get(id)
     if (!tab) return
-    const clean = title.replace(/\s+/g, ' ').trim()
-    const next = clean || DEFAULT_TAB_TITLE
-    if (tab.title === next) return
-    tab.title = next
+    const next = cleanTitle(title, 200)
+    if (tab.pageTitle === next) return
+    tab.pageTitle = next
     this.emitChanged()
+  }
+
+  /** Gives a tab a custom name; null or blank restores the page title. */
+  renameTab(id: string, name: string | null): boolean {
+    const tab = this.tabs.get(id)
+    if (!tab) return false
+    const next = name ? cleanTitle(name, MAX_TAB_NAME_LENGTH) || null : null
+    if (tab.customTitle === next) return true
+    tab.customTitle = next
+    this.emitChanged()
+    return true
+  }
+
+  /** Tabs in order, reduced to what is needed to reopen them later. */
+  snapshot(): { tabs: SavedTab[]; activeIndex: number } {
+    const tabs: SavedTab[] = []
+    let activeIndex = 0
+    for (const id of this.order) {
+      const tab = this.tabs.get(id)
+      if (!tab) continue
+      if (id === this.activeId) activeIndex = tabs.length
+      tabs.push({
+        url: restorableUrl(tab.pendingUrl ?? tab.url) ?? CHATGPT_HOME_URL,
+        title: tab.pageTitle,
+        customTitle: tab.customTitle
+      })
+    }
+    return { tabs, activeIndex }
   }
 
   /** Hide/show the web content area (e.g. while the Settings screen covers it). */
@@ -335,6 +386,19 @@ export class TabManager extends EventEmitter<TabManagerEvents> {
 
     contents.on('unresponsive', () => log.warn(`${tab.id} became unresponsive`))
     contents.on('responsive', () => log.info(`${tab.id} is responsive again`))
+  }
+
+  private displayTitle(tab: Tab): string {
+    return tab.customTitle ?? (tab.pageTitle || DEFAULT_TAB_TITLE)
+  }
+
+  private load(tab: Tab, url: string): void {
+    tab.pendingUrl = null
+    tab.url = url
+    tab.status = 'loading'
+    tab.view.webContents.loadURL(url).catch(() => {
+      // Failures are reported through did-fail-load; nothing else to do here.
+    })
   }
 
   private setStatus(tab: Tab, status: TabStatus): void {

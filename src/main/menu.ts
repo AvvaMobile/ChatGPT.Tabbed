@@ -99,6 +99,8 @@ export function buildApplicationMenu(controller: AppController): Menu {
         { label: 'Next Tab', accelerator: 'Ctrl+Tab', click: () => controller.selectAdjacentTab(1) },
         { label: 'Previous Tab', accelerator: 'Ctrl+Shift+Tab', click: () => controller.selectAdjacentTab(-1) },
         { type: 'separator' },
+        { label: 'Rename Tab…', accelerator: 'CmdOrCtrl+Shift+E', click: () => controller.beginRename() },
+        { type: 'separator' },
         ...tabNumberItems
       ]
     },

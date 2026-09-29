@@ -2,8 +2,11 @@
 
 A **Chrome-style tabbed** desktop client for the ChatGPT web app (Electron + TypeScript).
 
+![ChatGPT Tabs with three named tabs open](site/img/hero.png)
+
 - Every tab is its own `WebContentsView` (own renderer process, own navigation history, own conversation).
 - All tabs share **one persistent session** (`persist:chatgpt`): sign in once and every tab, and every future launch, stays signed in.
+- **Name your tabs** (double-click a tab) and **pick up where you left off**: tabs, names and order come back on the next launch.
 - Not a general-purpose browser: no address bar, bookmarks or history manager. Links outside ChatGPT open in the system browser.
 - Not an OpenAI API client; no API key needed. It uses your existing ChatGPT web account.
 - **No** telemetry, analytics, backend server or auto-update.
@@ -58,6 +61,16 @@ You can check the signature yourself: `spctl --assess --verbose "/Applications/C
 
 ---
 
+## Screenshots
+
+| Many chats side by side | Renaming a tab |
+| --- | --- |
+| ![Eight named tabs](site/img/many-tabs.png) | ![Renaming a tab inline](site/img/rename.png) |
+| **Dark mode** | **Settings** |
+| ![Dark mode](site/img/dark.png) | ![Settings screen with the Reopen tabs option](site/img/settings.png) |
+
+The screenshots are taken from the real app by `node scripts/capture-screenshots.mjs` (macOS, after packaging). It uses a throw-away profile and no account; prompts are typed into the composer but never sent.
+
 ## Contents
 
 1. [Download](#download)
@@ -65,13 +78,14 @@ You can check the signature yourself: `spctl --assess --verbose "/Applications/C
 3. [Publishing a release](#publishing-a-release)
 4. [First ChatGPT login](#first-chatgpt-login)
 5. [Clearing the session](#clearing-the-session)
-6. [Keyboard shortcuts](#keyboard-shortcuts)
-7. [Security model](#security-model)
-8. [Privacy](#privacy)
-9. [Architecture](#architecture)
-10. [Tests](#tests)
-11. [Known limitations](#known-limitations)
-12. [Troubleshooting](#troubleshooting)
+6. [Tab names and restoring tabs](#tab-names-and-restoring-tabs)
+7. [Keyboard shortcuts](#keyboard-shortcuts)
+8. [Security model](#security-model)
+9. [Privacy](#privacy)
+10. [Architecture](#architecture)
+11. [Tests](#tests)
+12. [Known limitations](#known-limitations)
+13. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -202,7 +216,22 @@ Where the session data lives on disk:
 
 Settings → **Clear ChatGPT Session** → **Clear Session** in the confirmation dialog.
 
-This deletes **all cookies, cache, localStorage/IndexedDB/service worker data and the HTTP auth cache** of the ChatGPT partition, flushes the cookie store to disk, closes an open login window and sends every tab back to the ChatGPT start page. Result: signed out in all tabs. Your conversations stay in your ChatGPT account; only local data on this computer is removed.
+This deletes **all cookies, cache, localStorage/IndexedDB/service worker data and the HTTP auth cache** of the ChatGPT partition, flushes the cookie store to disk, closes an open login window, forgets the saved tabs and tab names, and sends every tab back to the ChatGPT start page. Result: signed out in all tabs. Your conversations stay in your ChatGPT account; only local data on this computer is removed.
+
+## Tab names and restoring tabs
+
+**Rename a tab:** double-click it, press `⌘⇧E` / `Ctrl+Shift+E`, or right-click it and choose **Rename Tab…**. Press Enter to save or Esc to cancel. The name replaces the page title in the tab bar and stays even when ChatGPT changes the conversation title. Save an empty name (or choose **Reset Tab Name** in the right-click menu) to go back to the page title. The right-click menu also has Reload, Duplicate, Close and Close Other Tabs.
+
+**Pick up where you left off:** when you quit (or close the window), the app remembers your open tabs, their order, their names and which one was active, and reopens them next time. Only the active tab loads right away; the others load the first time you click them, so starting stays fast with many tabs.
+
+You can turn this off in **Settings → Tabs → Reopen tabs when the app starts**; turning it off also deletes the saved tabs.
+
+What is saved, in `<userData>/tabs.json` (readable only by your user account):
+
+- for each tab: the ChatGPT page as `origin + path` (for example `https://chatgpt.com/c/<id>`), its last page title, and your custom name, if any;
+- which tab was active.
+
+Query strings, fragments and sign-in/API URLs are never saved, and the file never contains cookies, tokens or message text. The file is validated when it is read, so a damaged or edited file is ignored rather than trusted. **Clear ChatGPT Session** deletes it.
 
 ## Keyboard shortcuts
 
@@ -214,13 +243,14 @@ This deletes **all cookies, cache, localStorage/IndexedDB/service worker data an
 | Reload without cache | `⌘⇧R` | `Ctrl+Shift+R` |
 | Go to tab 1–8 | `⌘1` … `⌘8` | `Ctrl+1` … `Ctrl+8` |
 | Go to last tab | `⌘9` | `Ctrl+9` |
+| Rename active tab | `⌘⇧E` | `Ctrl+Shift+E` |
 | Next / previous tab | `Ctrl+Tab` / `Ctrl+⇧Tab` | `Ctrl+Tab` / `Ctrl+Shift+Tab` |
 | Back / forward | `⌘[` / `⌘]` | `Alt+←` / `Alt+→` |
 | Settings | `⌘,` | `Ctrl+,` |
 | Zoom | `⌘+` / `⌘-` / `⌘0` | `Ctrl++` / `Ctrl+-` / `Ctrl+0` |
 | DevTools for tab | `⌥⌘I` | `Ctrl+Shift+I` |
 
-Shortcuts are application-menu accelerators, so they work whether focus is in the tab bar or on the ChatGPT page. Middle-clicking a tab closes it. Closing the last tab does not quit the app; a fresh tab opens instead.
+Shortcuts are application-menu accelerators, so they work whether focus is in the tab bar or on the ChatGPT page. Middle-clicking a tab closes it, double-clicking renames it, right-clicking shows the tab menu. Closing the last tab does not quit the app; a fresh tab opens instead.
 
 ---
 
@@ -273,7 +303,7 @@ A pure (Electron-free), unit-tested function:
 ### Credentials and cookies
 
 - The app **never reads, stores or logs** passwords, MFA codes, tokens or cookie values. Sign-in happens manually on the real web pages; there is no autofill or password capture.
-- The session lives in Electron's own cookie/storage mechanism (`persist:chatgpt`). The app has no separate config file or database.
+- The session lives in Electron's own cookie/storage mechanism (`persist:chatgpt`). The app's own files are only `settings.json` (preferences) and `tabs.json` (saved tabs, see [Tab names and restoring tabs](#tab-names-and-restoring-tabs)); both are written with user-only permissions and contain no credentials.
 - For the "Signed in" status the app only checks **whether** the session cookie exists; its value is never read.
 - URLs in logs are reduced to `origin + path` by `redactUrl` (query parameters such as OAuth `code`, `state` or tokens, and any `user:pass@` part, are dropped). Debug/info logs are off in production; only warnings/errors are written.
 - The cookie store is flushed to disk on quit, so the login survives restarts.
@@ -319,12 +349,13 @@ src/
 │   ├── menu.ts               # application menu = keyboard shortcuts
 │   ├── logger.ts             # verbose logs in dev only, never sensitive data
 │   ├── tabs/
-│   │   ├── TabManager.ts     # createTab/activateTab/closeTab/reloadTab/getActiveTab/listTabs/updateTabTitle/destroyAllTabs
+│   │   ├── TabManager.ts     # create/activate/close/reload/rename tabs, lazy restore, snapshot, destroyAllTabs
 │   │   ├── tabOrder.ts       # pure helpers (which tab after close, ⌘1-9, Ctrl+Tab)
 │   │   └── contextMenu.ts    # native right-click menu (copy/paste, links, images, spell check)
 │   ├── session/
 │   │   ├── chatgptSession.ts # persist:chatgpt: permissions, downloads, UA, signed-in check, clearing, flush
 │   │   └── userAgent.ts
+│   ├── persistence/          # settings.json + tabs.json: validated, atomic, user-only files
 │   ├── auth/LoginWindow.ts   # sign-in window on the same partition, and its lifecycle
 │   ├── security/
 │   │   ├── navigationPolicy.ts   # pure decision functions (unit-tested)
@@ -353,8 +384,8 @@ src/
 ## Tests
 
 ```bash
-npm run test:unit    # 21 tests: navigation policy, URL redaction, UA, layout, tab order, id validation
-npm run test:e2e     # 16 tests against the real Electron app
+npm run test:unit    # 29 tests: navigation policy, URL redaction, UA, layout, tab order, id validation, saved-tab parsing
+npm run test:e2e     # 22 tests against the real Electron app
 npm run smoke:package
 ```
 
@@ -368,6 +399,7 @@ The E2E tests need no real ChatGPT account or network: each test uses an isolate
 - clearing the session (cookies + localStorage removed); external link / `target=_blank` / script redirect → system browser; `file:` blocked; ChatGPT popup → new tab
 - bounds on window resize, load failure + Retry, renderer crash + recovery, invalid IPC rejected
 - closing the window cleans up every tab `WebContents` + reopening from the dock; cookies survive an app restart
+- renaming tabs (double-click, menu, Escape, reset), rename IPC validation; tabs, names and the active tab restored after a restart with background tabs loading on demand; the restore setting; clearing the session forgets saved tabs
 
 `smoke:package` launches the packaged `.app` with an isolated profile, connects over CDP and verifies that the UI loads from `app.asar`, real `https://chatgpt.com` opens, tabs can be opened/switched/closed, and Settings works.
 
@@ -383,7 +415,7 @@ Signing in with a real ChatGPT account is intentionally not automated. Manual sm
 - **Google/Microsoft/Apple sign-in** may occasionally restrict embedded browsers again. If that happens, use ChatGPT email + password sign-in or the "Log in" button inside a tab.
 - **Under automation** (`navigator.webdriver = true`) ChatGPT redirects signed-out users straight to Google sign-in, which is why the E2E tests use a stub page. This does not happen in normal use (verified in the package smoke test).
 - **Inactive tabs** are subject to Chromium's background throttling: a streaming answer keeps going, but the screen updates when you switch back to the tab. Each tab is a separate renderer process, so memory use grows with the number of tabs; a maximum of 50 tabs can be open as a safeguard.
-- **Open tabs are not restored on restart**; every launch starts with one clean tab (conversations are available from ChatGPT's left sidebar).
+- **Restored tabs reopen the conversation, not the page state**: unsent text in the composer, scroll position and back/forward history of a tab are not restored.
 - **No auto-update**; rerun `npm run package` for a new version.
 - `blob:` URLs (some previews ChatGPT opens "in a new window") open in a small sandboxed window.
 
