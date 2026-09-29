@@ -23,7 +23,7 @@ export function computeTabViewBounds(contentSize: Size, topBarHeight: number = T
 }
 
 /** Width of the gap between the two panes of the split view (the renderer draws the divider). */
-export const SPLIT_DIVIDER = 1
+export const SPLIT_DIVIDER = 6
 
 /** Left and right pane bounds for the two-column split view. */
 export function computeSplitBounds(

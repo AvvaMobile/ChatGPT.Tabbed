@@ -6,11 +6,13 @@ import { attachedViews, clickMenu, launchApp, mainContentSize, tabContentsIds, t
 
 const TOP_BAR = 40
 
+const DIVIDER = 6
+
 function expectedSplit(size: { width: number; height: number }) {
-  const leftWidth = Math.floor((size.width - 1) / 2)
+  const leftWidth = Math.floor((size.width - DIVIDER) / 2)
   return [
     { x: 0, y: TOP_BAR, width: leftWidth, height: size.height - TOP_BAR },
-    { x: leftWidth + 1, y: TOP_BAR, width: size.width - leftWidth - 1, height: size.height - TOP_BAR }
+    { x: leftWidth + DIVIDER, y: TOP_BAR, width: size.width - leftWidth - DIVIDER, height: size.height - TOP_BAR }
   ]
 }
 

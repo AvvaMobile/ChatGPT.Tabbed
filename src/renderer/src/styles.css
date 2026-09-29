@@ -13,6 +13,7 @@
   --danger: #c93a3a;
   --focus: #2f7de1;
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+  --divider-line: #a3a8b1;
   color-scheme: light;
 }
 
@@ -28,6 +29,7 @@
     --card: #2a2a2a;
     --danger: #ef6b6b;
     --shadow: none;
+    --divider-line: #5b5f66;
     color-scheme: dark;
   }
 }
@@ -96,7 +98,7 @@ html[data-platform='darwin'] .topbar[data-fullscreen='true'] {
 /* Split view: one half per column, aligned with the panes below (50% each around a 1px gap). */
 .topbar--split {
   display: grid;
-  grid-template-columns: calc(50% - 0.5px) 1px calc(50% - 0.5px);
+  grid-template-columns: calc(50% - 3px) 6px calc(50% - 3px);
   gap: 0;
   padding: 0;
 }
@@ -123,7 +125,6 @@ html[data-platform='darwin'] .topbar[data-fullscreen='true'] {
 
 .topbar__divider {
   align-self: stretch;
-  background: var(--border);
   -webkit-app-region: no-drag;
 }
 
@@ -310,15 +311,17 @@ html[data-platform='darwin'] .topbar[data-fullscreen='true'] {
   height: 100%;
 }
 
-/* Split view: the two WebContentsViews sit on top of these cells, the 1px gap shows the divider. */
+/* Split view: the two WebContentsViews sit on top of these cells; the 6px gap between them
+   (SPLIT_DIVIDER in src/main/window/layout.ts) shows the divider. */
 .split {
   display: grid;
-  grid-template-columns: 1fr 1px 1fr;
+  grid-template-columns: 1fr 6px 1fr;
   height: 100%;
 }
 
-.split__divider {
-  background: var(--border);
+.split__divider,
+.topbar__divider {
+  background: var(--bar) linear-gradient(var(--divider-line), var(--divider-line)) center / 2px 100% no-repeat;
 }
 
 .split__cell {
