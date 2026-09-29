@@ -6,6 +6,11 @@
   "main": "./out/main/index.js",
   "author": "Murat Yilmaz",
   "license": "UNLICENSED",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/AvvaMobile/ChatGPT.Tabbed.git"
+  },
+  "homepage": "https://github.com/AvvaMobile/ChatGPT.Tabbed",
   "private": true,
   "scripts": {
     "dev": "electron-vite dev",

@@ -14,7 +14,7 @@ A **Chrome-style tabbed** desktop client for the ChatGPT web app (Electron + Typ
 
 ## Download
 
-**➡️ [Download the latest release](../../releases/latest)**
+**➡️ [Download the latest release](https://github.com/AvvaMobile/ChatGPT.Tabbed/releases/latest)**
 
 | Platform | File | Notes |
 | --- | --- | --- |
@@ -89,8 +89,8 @@ Anyone can build their own copy; the result is identical in behaviour to the rel
 **Get the code and run it**
 
 ```bash
-git clone <this repository URL>
-cd <repository folder>
+git clone https://github.com/AvvaMobile/ChatGPT.Tabbed.git
+cd ChatGPT.Tabbed
 npm ci             # exact dependency versions from package-lock.json (+ Electron binary)
 npm run dev        # development mode, UI hot reload
 ```
@@ -146,7 +146,7 @@ Steps for a maintainer:
 2. Tag and push:
    ```bash
    git tag v1.1.0
-   git push origin main --tags
+   git push origin master --tags
    ```
 3. Wait for the **Release** workflow (Actions tab). It creates a **draft** release for the tag containing both `.dmg` files, the Windows installer, the portable `.zip` and `SHA256SUMS.txt`, with auto-generated release notes.
 4. Review the draft on the Releases page and click **Publish release**. The [Download](#download) link above always points to the newest published release.
