@@ -41,6 +41,10 @@ function start(): void {
   })
 
   app.whenReady().then(() => {
+    // Packaged builds get their icon from the bundle; unpackaged runs would show Electron's.
+    if (!app.isPackaged && process.platform === 'darwin') {
+      app.dock?.setIcon(join(app.getAppPath(), 'build', 'icon.png'))
+    }
     chatgpt.configure()
 
     // The default session only hosts the local shell UI; it never needs any permission.
