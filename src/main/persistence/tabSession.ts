@@ -19,10 +19,17 @@ export interface SavedTab {
   customTitle: string | null
 }
 
+export interface SavedSplit {
+  left: number
+  right: number
+}
+
 export interface SavedTabSession {
   version: typeof TAB_SESSION_VERSION
   activeIndex: number
   tabs: SavedTab[]
+  /** Tab indexes shown side by side, or null when split view was off. */
+  split: SavedSplit | null
 }
 
 /** A ChatGPT URL that is safe and useful to reopen, or null. */
@@ -55,14 +62,24 @@ export function parseTabSession(value: unknown): SavedTabSession | null {
     .filter((tab): tab is SavedTab => tab !== null)
   if (tabs.length === 0) return null
   const rawIndex = typeof record.activeIndex === 'number' && Number.isInteger(record.activeIndex) ? record.activeIndex : 0
-  const activeIndex = Math.min(Math.max(rawIndex, 0), tabs.length - 1)
-  return { version: TAB_SESSION_VERSION, activeIndex, tabs }
+  let activeIndex = Math.min(Math.max(rawIndex, 0), tabs.length - 1)
+  const split = parseSplit(record.split, tabs.length)
+  if (split && activeIndex !== split.left && activeIndex !== split.right) activeIndex = split.left
+  return { version: TAB_SESSION_VERSION, activeIndex, tabs, split }
 }
 
-export function buildTabSession(tabs: SavedTab[], activeIndex: number): SavedTabSession {
-  return parseTabSession({ version: TAB_SESSION_VERSION, activeIndex, tabs }) ?? {
+function parseSplit(value: unknown, count: number): SavedSplit | null {
+  if (!value || typeof value !== 'object') return null
+  const { left, right } = value as Record<string, unknown>
+  const valid = (n: unknown): n is number => typeof n === 'number' && Number.isInteger(n) && n >= 0 && n < count
+  return valid(left) && valid(right) && left !== right ? { left, right } : null
+}
+
+export function buildTabSession(tabs: SavedTab[], activeIndex: number, split: SavedSplit | null = null): SavedTabSession {
+  return parseTabSession({ version: TAB_SESSION_VERSION, activeIndex, tabs, split }) ?? {
     version: TAB_SESSION_VERSION,
     activeIndex: 0,
-    tabs: []
+    tabs: [],
+    split: null
   }
 }

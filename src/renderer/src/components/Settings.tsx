@@ -13,6 +13,7 @@ const SHORTCUTS: Array<[string, string]> = [
   [`${mod}1 … ${mod}8`, 'Go to tab 1–8'],
   [`${mod}9`, 'Go to last tab'],
   [isMac ? '⌘⇧E' : 'Ctrl+Shift+E', 'Rename tab (or double-click it)'],
+  [isMac ? '⌘\\' : 'Ctrl+\\', 'Split view on / off'],
   ['Ctrl+Tab / Ctrl+Shift+Tab', 'Next / previous tab'],
   [isMac ? '⌘[ / ⌘]' : 'Alt+← / Alt+→', 'Back / forward'],
   [isMac ? '⌘,' : 'Ctrl+,', 'Settings']

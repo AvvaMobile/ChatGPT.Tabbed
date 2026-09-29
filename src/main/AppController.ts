@@ -105,21 +105,25 @@ export class AppController {
       tabs.createTab()
       return
     }
-    log.info(`restoring ${saved.tabs.length} tab(s)`)
-    saved.tabs.forEach((tab, index) => {
-      tabs.createTab({
-        url: tab.url,
-        title: tab.title,
-        customTitle: tab.customTitle,
-        activate: index === saved.activeIndex,
-        lazy: index !== saved.activeIndex
-      })
-    })
+    log.info(`restoring ${saved.tabs.length} tab(s)${saved.split ? ' in split view' : ''}`)
+    const ids = saved.tabs.map(
+      (tab, index) =>
+        tabs.createTab({
+          url: tab.url,
+          title: tab.title,
+          customTitle: tab.customTitle,
+          activate: index === saved.activeIndex,
+          lazy: index !== saved.activeIndex
+        })?.id ?? null
+    )
+    const left = saved.split ? ids[saved.split.left] : null
+    const right = saved.split ? ids[saved.split.right] : null
+    if (left && right) tabs.restoreSplit(left, right)
   }
 
   private currentTabSession(tabs: TabManager) {
-    const { tabs: saved, activeIndex } = tabs.snapshot()
-    return buildTabSession(saved, activeIndex)
+    const { tabs: saved, activeIndex, split } = tabs.snapshot()
+    return buildTabSession(saved, activeIndex, split)
   }
 
   focusOrCreateWindow(): void {
@@ -139,6 +143,7 @@ export class AppController {
       tabs,
       activeTabId: this.tabs?.getActiveId() ?? null,
       settingsOpen: this.settingsOpen,
+      split: this.tabs?.isSplit ?? false,
       fullscreen: this.mainWindow?.isFullScreen() ?? false,
       loginWindowOpen: this.login.isOpen
     }
@@ -200,6 +205,19 @@ export class AppController {
     this.tabs?.activateAdjacent(delta)
   }
 
+  toggleSplit(): void {
+    this.setSettingsOpen(false)
+    this.tabs?.toggleSplit()
+  }
+
+  openInSplit(id: string): void {
+    this.setSettingsOpen(false)
+    const tabs = this.tabs
+    if (!tabs?.getTab(id)) return
+    if (tabs.getActiveId() === id && !tabs.isSplit) tabs.enableSplit()
+    else tabs.enableSplit(id)
+  }
+
   renameTab(id: string, name: string | null): void {
     this.tabs?.renameTab(id, name)
   }
@@ -242,6 +260,11 @@ export class AppController {
       { type: 'separator' },
       { label: 'Reload Tab', click: () => this.reloadTab(id) },
       { label: 'Duplicate Tab', click: () => this.duplicateTab(id) },
+      {
+        label: 'Open in Split View',
+        enabled: !(this.tabs?.isSplit && this.tabs.listTabs().some((t) => t.id === id && t.pane !== null)),
+        click: () => this.openInSplit(id)
+      },
       { type: 'separator' },
       { label: 'Close Tab', click: () => this.closeTab(id) },
       { label: 'Close Other Tabs', enabled: total > 1, click: () => this.closeOtherTabs(id) }

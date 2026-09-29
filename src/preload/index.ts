@@ -29,6 +29,7 @@ const api: RendererApi = {
   clearSession: () => ipcRenderer.invoke(IpcChannel.ClearSession),
   renameTab: (id, name) => ipcRenderer.invoke(IpcChannel.RenameTab, id, name),
   showTabMenu: (id) => ipcRenderer.invoke(IpcChannel.ShowTabMenu, id),
+  toggleSplit: () => ipcRenderer.invoke(IpcChannel.ToggleSplit),
   onBeginRename: (listener) => {
     const handler = (_event: IpcRendererEvent, id: string): void => listener(id)
     ipcRenderer.on(IpcChannel.BeginRename, handler)

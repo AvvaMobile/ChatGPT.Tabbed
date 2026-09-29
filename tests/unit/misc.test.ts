@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { CHATGPT_PARTITION, TOP_BAR_HEIGHT } from '../../src/shared/constants'
 import { isTabId } from '../../src/shared/validation'
 import { toChromeUserAgent } from '../../src/main/session/userAgent'
-import { computeTabViewBounds } from '../../src/main/window/layout'
+import { computeSplitBounds, computeTabViewBounds } from '../../src/main/window/layout'
 import { adjacentTabId, pickNextActiveTab, tabIdForShortcut } from '../../src/main/tabs/tabOrder'
 
 describe('constants', () => {
@@ -49,6 +49,22 @@ describe('computeTabViewBounds', () => {
 
   it('floors fractional sizes', () => {
     expect(computeTabViewBounds({ width: 800.7, height: 600.9 }, 40)).toEqual({ x: 0, y: 40, width: 800, height: 560 })
+  })
+})
+
+describe('computeSplitBounds', () => {
+  it('splits the content area into two columns with a 1px gap', () => {
+    const { left, right } = computeSplitBounds({ width: 1281, height: 860 })
+    expect(left).toEqual({ x: 0, y: TOP_BAR_HEIGHT, width: 640, height: 860 - TOP_BAR_HEIGHT })
+    expect(right).toEqual({ x: 641, y: TOP_BAR_HEIGHT, width: 640, height: 860 - TOP_BAR_HEIGHT })
+  })
+
+  it('covers the full width without overlap for odd and even sizes', () => {
+    for (const width of [640, 641, 1000, 1439]) {
+      const { left, right } = computeSplitBounds({ width, height: 700 })
+      expect(left.width + 1 + right.width).toBe(width)
+      expect(right.x).toBe(left.width + 1)
+    }
   })
 })
 

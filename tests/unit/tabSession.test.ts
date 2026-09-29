@@ -42,7 +42,8 @@ describe('parseTabSession', () => {
     expect(session).toEqual({
       version: 1,
       activeIndex: 0,
-      tabs: [{ url: 'https://chatgpt.com/c/2', title: '', customTitle: null }]
+      tabs: [{ url: 'https://chatgpt.com/c/2', title: '', customTitle: null }],
+      split: null
     })
   })
 
@@ -51,6 +52,22 @@ describe('parseTabSession', () => {
     expect(parseTabSession('tabs')).toBeNull()
     expect(parseTabSession({ version: 2, activeIndex: 0, tabs: [{ url: 'https://chatgpt.com/' }] })).toBeNull()
     expect(parseTabSession({ version: 1, activeIndex: 0, tabs: [] })).toBeNull()
+  })
+
+  it('keeps a valid split and makes the active tab one of its panes', () => {
+    const tabs = [0, 1, 2].map((i) => ({ url: `https://chatgpt.com/c/${i}` }))
+    expect(parseTabSession({ version: 1, activeIndex: 2, tabs, split: { left: 0, right: 2 } })).toMatchObject({
+      activeIndex: 2,
+      split: { left: 0, right: 2 }
+    })
+    expect(parseTabSession({ version: 1, activeIndex: 1, tabs, split: { left: 0, right: 2 } })?.activeIndex).toBe(0)
+  })
+
+  it('drops invalid splits', () => {
+    const tabs = [0, 1].map((i) => ({ url: `https://chatgpt.com/c/${i}` }))
+    for (const split of [{ left: 0, right: 0 }, { left: 0, right: 5 }, { left: -1, right: 1 }, { left: '0', right: 1 }, 'yes']) {
+      expect(parseTabSession({ version: 1, activeIndex: 0, tabs, split })?.split).toBeNull()
+    }
   })
 
   it('limits the number of tabs', () => {

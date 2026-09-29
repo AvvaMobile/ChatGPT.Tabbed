@@ -17,6 +17,7 @@ export const IpcChannel = {
   RenameTab: 'tabs:rename',
   ShowTabMenu: 'tabs:show-menu',
   BeginRename: 'tabs:begin-rename',
+  ToggleSplit: 'tabs:toggle-split',
   GetSettings: 'settings:get',
   SetSettings: 'settings:set'
 } as const
@@ -36,6 +37,8 @@ export interface TabInfo {
   active: boolean
   /** True when the user gave the tab a custom name. */
   renamed: boolean
+  /** Which split-view pane shows this tab, or null when it is not on screen in split view. */
+  pane: 'left' | 'right' | null
   status: TabStatus
   error: TabError | null
   canGoBack: boolean
@@ -46,6 +49,8 @@ export interface AppState {
   tabs: TabInfo[]
   activeTabId: string | null
   settingsOpen: boolean
+  /** Two tabs side by side. */
+  split: boolean
   fullscreen: boolean
   loginWindowOpen: boolean
 }
@@ -94,6 +99,7 @@ export interface RendererApi {
   /** Sets a custom tab name; an empty string or null restores the page title. */
   renameTab(id: string, name: string | null): Promise<void>
   showTabMenu(id: string): Promise<void>
+  toggleSplit(): Promise<void>
   onBeginRename(listener: (id: string) => void): () => void
   getSettings(): Promise<AppSettings>
   setSettings(patch: Partial<AppSettings>): Promise<AppSettings>

@@ -100,6 +100,7 @@ export function buildApplicationMenu(controller: AppController): Menu {
         { label: 'Previous Tab', accelerator: 'Ctrl+Shift+Tab', click: () => controller.selectAdjacentTab(-1) },
         { type: 'separator' },
         { label: 'Rename Tab…', accelerator: 'CmdOrCtrl+Shift+E', click: () => controller.beginRename() },
+        { label: 'Toggle Split View', accelerator: 'CmdOrCtrl+\\', click: () => controller.toggleSplit() },
         { type: 'separator' },
         ...tabNumberItems
       ]

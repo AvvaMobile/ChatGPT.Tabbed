@@ -64,6 +64,7 @@ export function registerIpc(controller: AppController): void {
     controller.renameTab(requireTabId(id), name)
   })
   handle(IpcChannel.ShowTabMenu, (id) => controller.showTabMenu(requireTabId(id)))
+  handle(IpcChannel.ToggleSplit, () => controller.toggleSplit())
   handle(IpcChannel.GetSettings, () => controller.getSettings())
   handle(IpcChannel.SetSettings, (patch) => controller.updateSettings(patch))
 }

@@ -5,6 +5,7 @@ const EMPTY_STATE: AppState = {
   tabs: [],
   activeTabId: null,
   settingsOpen: false,
+  split: false,
   fullscreen: false,
   loginWindowOpen: false
 }

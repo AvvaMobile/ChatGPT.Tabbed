@@ -7,6 +7,7 @@ A **Chrome-style tabbed** desktop client for the ChatGPT web app (Electron + Typ
 - Every tab is its own `WebContentsView` (own renderer process, own navigation history, own conversation).
 - All tabs share **one persistent session** (`persist:chatgpt`): sign in once and every tab, and every future launch, stays signed in.
 - **Name your tabs** (double-click a tab) and **pick up where you left off**: tabs, names and order come back on the next launch.
+- **Split view**: two chats side by side with the two-column button in the top-right corner (or `⌘\` / `Ctrl+\`).
 - Not a general-purpose browser: no address bar, bookmarks or history manager. Links outside ChatGPT open in the system browser.
 - Not an OpenAI API client; no API key needed. It uses your existing ChatGPT web account.
 - **No** telemetry, analytics, backend server or auto-update.
@@ -224,10 +225,13 @@ This deletes **all cookies, cache, localStorage/IndexedDB/service worker data an
 
 **Pick up where you left off:** when you quit (or close the window), the app remembers your open tabs, their order, their names and which one was active, and reopens them next time. Only the active tab loads right away; the others load the first time you click them, so starting stays fast with many tabs.
 
+**Split view:** click the two-column button next to Settings (or press `⌘\` / `Ctrl+\`) to show two tabs side by side. The active tab stays on the left and the neighbouring tab (or a new chat, if there is only one tab) opens on the right. Click into a pane to make it active; choosing another tab in the tab bar puts it into the active pane. Right-click a tab and choose **Open in Split View** to put a specific tab next to the current one. Closing one of the two tabs, or pressing the button again, returns to a single pane. Split view is restored together with your tabs.
+
 You can turn this off in **Settings → Tabs → Reopen tabs when the app starts**; turning it off also deletes the saved tabs.
 
 What is saved, in `<userData>/tabs.json` (readable only by your user account):
 
+- whether split view was on, and which two tabs it showed;
 - for each tab: the ChatGPT page as `origin + path` (for example `https://chatgpt.com/c/<id>`), its last page title, and your custom name, if any;
 - which tab was active.
 
@@ -244,6 +248,7 @@ Query strings, fragments and sign-in/API URLs are never saved, and the file neve
 | Go to tab 1–8 | `⌘1` … `⌘8` | `Ctrl+1` … `Ctrl+8` |
 | Go to last tab | `⌘9` | `Ctrl+9` |
 | Rename active tab | `⌘⇧E` | `Ctrl+Shift+E` |
+| Split view on / off | `⌘\` | `Ctrl+\` |
 | Next / previous tab | `Ctrl+Tab` / `Ctrl+⇧Tab` | `Ctrl+Tab` / `Ctrl+Shift+Tab` |
 | Back / forward | `⌘[` / `⌘]` | `Alt+←` / `Alt+→` |
 | Settings | `⌘,` | `Ctrl+,` |

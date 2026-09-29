@@ -52,6 +52,13 @@ export const SettingsIcon = (props: IconProps) => (
   </svg>
 )
 
+export const SplitIcon = (props: IconProps) => (
+  <svg {...base} width={17} height={17} viewBox="0 0 24 24" strokeWidth={1.9} {...props}>
+    <rect x="3" y="4.5" width="18" height="15" rx="3" />
+    <path d="M12 4.5v15" />
+  </svg>
+)
+
 export const ChatIcon = (props: IconProps) => (
   <svg {...base} {...props}>
     <path d="M2.5 4.5a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v4.5a2 2 0 0 1-2 2H7l-3 2.5v-2.5h0a1.5 1.5 0 0 1-1.5-1.5z" />

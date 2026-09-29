@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
 import { MAX_TAB_NAME_LENGTH } from '@shared/constants'
 import type { AppState, TabInfo } from '@shared/ipc'
-import { BackIcon, ChatIcon, CloseIcon, ForwardIcon, PlusIcon, ReloadIcon, SettingsIcon } from './Icons'
+import { BackIcon, ChatIcon, CloseIcon, ForwardIcon, PlusIcon, ReloadIcon, SettingsIcon, SplitIcon } from './Icons'
 
 const api = window.chatgptTabs
 
@@ -74,9 +74,10 @@ function Tab({ tab, editing, onEdit }: { tab: TabInfo; editing: boolean; onEdit:
       data-testid="tab"
       data-tab-id={tab.id}
       data-active={tab.active}
-      className={`tab${tab.active ? ' tab--active' : ''}`}
+      className={`tab${tab.active ? ' tab--active' : ''}${tab.pane ? ' tab--visible' : ''}`}
       data-title={tab.title}
       data-renamed={tab.renamed}
+      data-pane={tab.pane ?? undefined}
       onMouseDown={onMouseDown}
       onAuxClick={onAuxClick}
       onDoubleClick={() => onEdit(tab.id)}
@@ -173,6 +174,17 @@ export function TabBar({ state }: { state: AppState }) {
       </div>
 
       <div className="topbar__actions">
+        <button
+          type="button"
+          className={`icon-button${state.split ? ' icon-button--on' : ''}`}
+          aria-label="Split view"
+          aria-pressed={state.split}
+          title={state.split ? 'Close split view' : 'Split view: two tabs side by side'}
+          data-testid="split-button"
+          onClick={() => void api.toggleSplit()}
+        >
+          <SplitIcon />
+        </button>
         <button
           type="button"
           className={`icon-button${state.settingsOpen ? ' icon-button--on' : ''}`}

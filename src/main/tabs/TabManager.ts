@@ -3,11 +3,11 @@ import { WebContentsView, type BrowserWindow, type WebContents } from 'electron'
 import { CHATGPT_HOME_URL, CHATGPT_PARTITION, DEFAULT_TAB_TITLE, MAX_TAB_NAME_LENGTH, MAX_TABS } from '@shared/constants'
 import type { TabError, TabInfo, TabStatus } from '@shared/ipc'
 import { cleanTitle } from '@shared/validation'
-import { restorableUrl, type SavedTab } from '../persistence/tabSession'
+import { restorableUrl, type SavedSplit, type SavedTab } from '../persistence/tabSession'
 import { createLogger } from '../logger'
 import { isChatGptUrl, redactUrl } from '../security/navigationPolicy'
 import { applyNavigationPolicy } from '../security/webContentsPolicy'
-import { computeTabViewBounds } from '../window/layout'
+import { computeSplitBounds, computeTabViewBounds } from '../window/layout'
 import { attachContextMenu } from './contextMenu'
 import { adjacentTabId, pickNextActiveTab, tabIdForShortcut } from './tabOrder'
 
@@ -50,14 +50,17 @@ interface TabManagerEvents {
  * Owns every ChatGPT tab. Each tab has its own WebContentsView (own renderer, own navigation
  * history) while all of them share the single persistent `persist:chatgpt` session.
  *
- * Only the active tab's view is attached to the window; inactive views stay alive (detached)
- * so their conversations continue where they left off.
+ * Only the visible tabs' views are attached to the window (one, or two in split view); the
+ * other views stay alive (detached) so their conversations continue where they left off.
+ *
+ * In split view `panes` holds the left and right tab; `activeId` is the focused one of the two.
  */
 export class TabManager extends EventEmitter<TabManagerEvents> {
   private readonly tabs = new Map<string, Tab>()
   private order: string[] = []
   private activeId: string | null = null
-  private attachedId: string | null = null
+  private panes: [string, string] | null = null
+  private readonly attachedIds = new Set<string>()
   private nextId = 1
   private contentHidden = false
   private destroyed = false
@@ -128,6 +131,11 @@ export class TabManager extends EventEmitter<TabManagerEvents> {
   activateTab(id: string): boolean {
     const tab = this.tabs.get(id)
     if (!tab || this.destroyed) return false
+    // In split view a tab that is not on screen replaces the focused pane.
+    if (this.panes && !this.panes.includes(id)) {
+      const focused = this.activeId ? this.panes.indexOf(this.activeId) : 0
+      this.panes[focused === -1 ? 0 : focused] = id
+    }
     this.activeId = id
     if (tab.pendingUrl) this.load(tab, tab.pendingUrl)
     this.syncAttachedView()
@@ -141,7 +149,13 @@ export class TabManager extends EventEmitter<TabManagerEvents> {
     const tab = this.tabs.get(id)
     if (!tab) return false
 
-    const nextActive = this.activeId === id ? pickNextActiveTab(this.order, id) : this.activeId
+    let nextActive = this.activeId === id ? pickNextActiveTab(this.order, id) : this.activeId
+    // Closing one of the two split tabs leaves the other one full width.
+    if (this.panes?.includes(id)) {
+      const other = this.panes[0] === id ? this.panes[1] : this.panes[0]
+      if (this.activeId === id) nextActive = other
+      this.panes = null
+    }
     this.order = this.order.filter((tabId) => tabId !== id)
     this.tabs.delete(id)
     if (this.activeId === id) this.activeId = null
@@ -221,6 +235,72 @@ export class TabManager extends EventEmitter<TabManagerEvents> {
     if (id) this.activateTab(id)
   }
 
+  get isSplit(): boolean {
+    return this.panes !== null
+  }
+
+  /**
+   * Shows two tabs side by side: the active tab on the left and `partnerId` (or the neighbouring
+   * tab, or a new chat) on the right. In split view, a partner replaces the unfocused pane.
+   */
+  enableSplit(partnerId?: string): void {
+    const active = this.activeId
+    if (!active || this.destroyed) return
+    if (this.panes) {
+      if (partnerId && this.tabs.has(partnerId) && !this.panes.includes(partnerId)) {
+        const other = this.panes[0] === active ? 1 : 0
+        this.panes[other] = partnerId
+        this.loadIfPending(partnerId)
+        this.syncAttachedView()
+        this.emitChanged()
+      }
+      return
+    }
+
+    let partner = partnerId && partnerId !== active && this.tabs.has(partnerId) ? partnerId : null
+    let focusPartner = false
+    if (!partner) {
+      const index = this.order.indexOf(active)
+      partner = this.order[index + 1] ?? this.order[index - 1] ?? null
+    }
+    if (!partner) {
+      partner = this.createTab({ activate: false })?.id ?? null
+      focusPartner = true
+    }
+    if (!partner) return
+
+    this.panes = [active, partner]
+    this.loadIfPending(partner)
+    if (focusPartner) this.activeId = partner
+    this.syncAttachedView()
+    if (!this.contentHidden) this.focusActive()
+    this.emitChanged()
+  }
+
+  disableSplit(): void {
+    if (!this.panes) return
+    this.panes = null
+    this.syncAttachedView()
+    if (!this.contentHidden) this.focusActive()
+    this.emitChanged()
+  }
+
+  toggleSplit(): void {
+    if (this.panes) this.disableSplit()
+    else this.enableSplit()
+  }
+
+  /** Restores a saved split: `left`/`right` are tab ids, the active tab must be one of them. */
+  restoreSplit(left: string, right: string): void {
+    if (!this.tabs.has(left) || !this.tabs.has(right) || left === right) return
+    this.panes = [left, right]
+    if (this.activeId !== left && this.activeId !== right) this.activeId = left
+    this.loadIfPending(left)
+    this.loadIfPending(right)
+    this.syncAttachedView()
+    this.emitChanged()
+  }
+
   getActiveTab(): Tab | null {
     return this.activeId ? (this.tabs.get(this.activeId) ?? null) : null
   }
@@ -250,6 +330,7 @@ export class TabManager extends EventEmitter<TabManagerEvents> {
           url: redactUrl(tab.url),
           active: id === this.activeId,
           renamed: tab.customTitle !== null,
+          pane: this.panes ? (this.panes[0] === id ? 'left' : this.panes[1] === id ? 'right' : null) : null,
           status: tab.status,
           error: tab.error,
           canGoBack: alive && contents.navigationHistory.canGoBack(),
@@ -281,7 +362,7 @@ export class TabManager extends EventEmitter<TabManagerEvents> {
   }
 
   /** Tabs in order, reduced to what is needed to reopen them later. */
-  snapshot(): { tabs: SavedTab[]; activeIndex: number } {
+  snapshot(): { tabs: SavedTab[]; activeIndex: number; split: SavedSplit | null } {
     const tabs: SavedTab[] = []
     let activeIndex = 0
     for (const id of this.order) {
@@ -294,7 +375,8 @@ export class TabManager extends EventEmitter<TabManagerEvents> {
         customTitle: tab.customTitle
       })
     }
-    return { tabs, activeIndex }
+    const split = this.panes ? { left: this.order.indexOf(this.panes[0]), right: this.order.indexOf(this.panes[1]) } : null
+    return { tabs, activeIndex, split: split && split.left >= 0 && split.right >= 0 ? split : null }
   }
 
   /** Hide/show the web content area (e.g. while the Settings screen covers it). */
@@ -305,13 +387,17 @@ export class TabManager extends EventEmitter<TabManagerEvents> {
     if (!hidden) this.focusActive()
   }
 
-  /** Recomputes the active view bounds from the current window content size. */
+  /** Recomputes the visible views' bounds from the current window content size. */
   updateLayout(): void {
-    if (this.window.isDestroyed() || !this.attachedId) return
-    const tab = this.tabs.get(this.attachedId)
-    if (!tab) return
+    if (this.window.isDestroyed() || this.attachedIds.size === 0) return
     const [width, height] = this.window.getContentSize()
-    tab.view.setBounds(computeTabViewBounds({ width, height }))
+    if (this.panes) {
+      const { left, right } = computeSplitBounds({ width, height })
+      this.tabs.get(this.panes[0])?.view.setBounds(left)
+      this.tabs.get(this.panes[1])?.view.setBounds(right)
+      return
+    }
+    for (const id of this.attachedIds) this.tabs.get(id)?.view.setBounds(computeTabViewBounds({ width, height }))
   }
 
   setBackgroundColor(color: string): void {
@@ -325,7 +411,8 @@ export class TabManager extends EventEmitter<TabManagerEvents> {
     this.tabs.clear()
     this.order = []
     this.activeId = null
-    this.attachedId = null
+    this.panes = null
+    this.attachedIds.clear()
     this.removeAllListeners()
   }
 
@@ -384,12 +471,25 @@ export class TabManager extends EventEmitter<TabManagerEvents> {
       this.setStatus(tab, 'crashed')
     })
 
+    // Clicking into a split pane makes that tab the active one.
+    contents.on('focus', () => {
+      if (this.panes?.includes(tab.id) && this.activeId !== tab.id) {
+        this.activeId = tab.id
+        this.emitChanged()
+      }
+    })
+
     contents.on('unresponsive', () => log.warn(`${tab.id} became unresponsive`))
     contents.on('responsive', () => log.info(`${tab.id} is responsive again`))
   }
 
   private displayTitle(tab: Tab): string {
     return tab.customTitle ?? (tab.pageTitle || DEFAULT_TAB_TITLE)
+  }
+
+  private loadIfPending(id: string): void {
+    const tab = this.tabs.get(id)
+    if (tab?.pendingUrl) this.load(tab, tab.pendingUrl)
   }
 
   private load(tab: Tab, url: string): void {
@@ -405,44 +505,55 @@ export class TabManager extends EventEmitter<TabManagerEvents> {
     if (!this.tabs.has(tab.id)) return
     if (status === 'loading') tab.error = null
     tab.status = status
-    if (tab.id === this.activeId) this.syncAttachedView()
+    if (this.visibleIds().includes(tab.id)) this.syncAttachedView()
     this.emitChanged()
   }
 
-  /** Ensures exactly the visible active tab's view is attached to the window. */
+  /** Tabs that should be on screen: the active tab, or both split panes. */
+  private visibleIds(): string[] {
+    if (this.panes) return [...this.panes]
+    return this.activeId ? [this.activeId] : []
+  }
+
+  /** Ensures exactly the visible, healthy tabs' views are attached to the window. */
   private syncAttachedView(): void {
     if (this.window.isDestroyed()) return
-    const active = this.getActiveTab()
-    const showable =
-      active && !this.contentHidden && active.status !== 'error' && active.status !== 'crashed' ? active : null
-    const desiredId = showable?.id ?? null
+    const desired = new Set(
+      this.contentHidden
+        ? []
+        : this.visibleIds().filter((id) => {
+            const tab = this.tabs.get(id)
+            return tab && tab.status !== 'error' && tab.status !== 'crashed'
+          })
+    )
 
-    if (this.attachedId && this.attachedId !== desiredId) {
-      const previous = this.tabs.get(this.attachedId)
-      if (previous && !previous.view.webContents.isDestroyed()) {
-        this.window.contentView.removeChildView(previous.view)
-      }
-      this.attachedId = null
+    for (const id of [...this.attachedIds]) {
+      if (desired.has(id)) continue
+      const tab = this.tabs.get(id)
+      if (tab && !tab.view.webContents.isDestroyed()) this.window.contentView.removeChildView(tab.view)
+      this.attachedIds.delete(id)
     }
-
-    if (showable && this.attachedId !== desiredId) {
-      this.window.contentView.addChildView(showable.view)
-      this.attachedId = desiredId
+    for (const id of desired) {
+      if (this.attachedIds.has(id)) continue
+      const tab = this.tabs.get(id)
+      if (!tab) continue
+      this.window.contentView.addChildView(tab.view)
+      this.attachedIds.add(id)
     }
     this.updateLayout()
   }
 
   private focusActive(): void {
     const active = this.getActiveTab()
-    if (active && active.id === this.attachedId && !active.view.webContents.isDestroyed()) {
+    if (active && this.attachedIds.has(active.id) && !active.view.webContents.isDestroyed()) {
       active.view.webContents.focus()
     }
   }
 
   private disposeTab(tab: Tab): void {
-    if (this.attachedId === tab.id) {
+    if (this.attachedIds.has(tab.id)) {
       if (!this.window.isDestroyed()) this.window.contentView.removeChildView(tab.view)
-      this.attachedId = null
+      this.attachedIds.delete(tab.id)
     }
     const contents: WebContents = tab.view.webContents
     if (!contents.isDestroyed()) {
