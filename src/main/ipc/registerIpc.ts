@@ -1,6 +1,6 @@
 import { ipcMain, type IpcMainInvokeEvent } from 'electron'
 import { IpcChannel } from '@shared/ipc'
-import { MAX_TAB_NAME_LENGTH } from '@shared/constants'
+import { MAX_TAB_NAME_LENGTH, MAX_TABS } from '@shared/constants'
 import { isTabId } from '@shared/validation'
 import type { AppController } from '../AppController'
 import { createLogger } from '../logger'
@@ -68,6 +68,13 @@ export function registerIpc(controller: AppController): void {
   })
   handle(IpcChannel.ShowTabMenu, (id) => controller.showTabMenu(requireTabId(id)))
   handle(IpcChannel.ToggleSplit, () => controller.toggleSplit())
+  handle(IpcChannel.MoveTab, (id, group, index) => {
+    if (group !== 0 && group !== 1) throw new Error('Invalid column')
+    if (typeof index !== 'number' || !Number.isInteger(index) || index < 0 || index > MAX_TABS) {
+      throw new Error('Invalid tab position')
+    }
+    controller.moveTab(requireTabId(id), group, index)
+  })
   handle(IpcChannel.GetSettings, () => controller.getSettings())
   handle(IpcChannel.SetSettings, (patch) => controller.updateSettings(patch))
 }

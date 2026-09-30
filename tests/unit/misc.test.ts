@@ -3,7 +3,7 @@ import { CHATGPT_PARTITION, TOP_BAR_HEIGHT } from '../../src/shared/constants'
 import { isTabId } from '../../src/shared/validation'
 import { toChromeUserAgent } from '../../src/main/session/userAgent'
 import { computeSplitBounds, computeTabViewBounds, SPLIT_DIVIDER } from '../../src/main/window/layout'
-import { adjacentTabId, pickNextActiveTab, tabIdForShortcut } from '../../src/main/tabs/tabOrder'
+import { adjacentTabId, moveInOrder, pickNextActiveTab, tabIdForShortcut } from '../../src/main/tabs/tabOrder'
 
 describe('constants', () => {
   it('uses the fixed persistent partition', () => {
@@ -90,5 +90,20 @@ describe('tab order helpers', () => {
     expect(adjacentTabId(order, 'tab-3', 1)).toBe('tab-1')
     expect(adjacentTabId(order, 'tab-1', -1)).toBe('tab-3')
     expect(adjacentTabId([], null, 1)).toBeNull()
+  })
+
+  it('moves a tab to a drop slot within its own list', () => {
+    expect(moveInOrder(order, 'tab-1', 3)).toEqual(['tab-2', 'tab-3', 'tab-1'])
+    expect(moveInOrder(order, 'tab-1', 2)).toEqual(['tab-2', 'tab-1', 'tab-3'])
+    expect(moveInOrder(order, 'tab-3', 0)).toEqual(['tab-3', 'tab-1', 'tab-2'])
+    // Dropping on either side of itself changes nothing.
+    expect(moveInOrder(order, 'tab-2', 1)).toEqual(order)
+    expect(moveInOrder(order, 'tab-2', 2)).toEqual(order)
+  })
+
+  it('inserts a tab coming from another list and clamps the slot', () => {
+    expect(moveInOrder(order, 'tab-9', 1)).toEqual(['tab-1', 'tab-9', 'tab-2', 'tab-3'])
+    expect(moveInOrder(order, 'tab-9', 99)).toEqual(['tab-1', 'tab-2', 'tab-3', 'tab-9'])
+    expect(moveInOrder(order, 'tab-9', -4)).toEqual(['tab-9', 'tab-1', 'tab-2', 'tab-3'])
   })
 })

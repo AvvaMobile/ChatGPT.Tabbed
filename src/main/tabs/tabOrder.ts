@@ -19,3 +19,16 @@ export function adjacentTabId(order: readonly string[], currentId: string | null
   if (index === -1) return order[0]
   return order[(index + delta + order.length) % order.length]
 }
+
+/**
+ * Order after dropping `id` into slot `index` (0 = before the first tab, `order.length` = after
+ * the last one; slots refer to `order` as it is now). `id` may come from another list.
+ */
+export function moveInOrder(order: readonly string[], id: string, index: number): string[] {
+  const from = order.indexOf(id)
+  let slot = Math.max(0, Math.min(order.length, Math.trunc(index)))
+  if (from !== -1 && slot > from) slot -= 1
+  const next = order.filter((tabId) => tabId !== id)
+  next.splice(slot, 0, id)
+  return next
+}

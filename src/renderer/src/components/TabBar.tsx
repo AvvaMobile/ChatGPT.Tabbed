@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
+import { useEffect, useRef, useState, type DragEvent, type KeyboardEvent, type MouseEvent } from 'react'
 import { MAX_TAB_NAME_LENGTH } from '@shared/constants'
 import type { AppState, TabInfo } from '@shared/ipc'
 import { BackIcon, ChatIcon, CloseIcon, ForwardIcon, PlusIcon, ReloadIcon, SettingsIcon, SplitIcon } from './Icons'
@@ -40,7 +40,24 @@ function TabNameEditor({ tab, onDone }: { tab: TabInfo; onDone: () => void }) {
   )
 }
 
-function Tab({ tab, editing, onEdit }: { tab: TabInfo; editing: boolean; onEdit: (id: string | null) => void }) {
+/** Tab being dragged and the slot it would be dropped into. */
+interface DragState {
+  id: string
+  target: { group: 0 | 1; index: number } | null
+}
+
+interface TabProps {
+  tab: TabInfo
+  editing: boolean
+  onEdit: (id: string | null) => void
+  /** Drop indicator shown on this tab's edge while another tab is dragged over the strip. */
+  dropMark: 'before' | 'after' | null
+  dragging: boolean
+  onDragStart: (id: string) => void
+  onDragEnd: () => void
+}
+
+function Tab({ tab, editing, onEdit, dropMark, dragging, onDragStart, onDragEnd }: TabProps) {
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -74,7 +91,14 @@ function Tab({ tab, editing, onEdit }: { tab: TabInfo; editing: boolean; onEdit:
       data-testid="tab"
       data-tab-id={tab.id}
       data-active={tab.active}
-      className={`tab${tab.active ? ' tab--active' : tab.selected ? ' tab--selected' : ''}`}
+      className={`tab${tab.active ? ' tab--active' : tab.selected ? ' tab--selected' : ''}${dragging ? ' tab--dragging' : ''}${dropMark ? ` tab--drop-${dropMark}` : ''}`}
+      draggable={!editing}
+      onDragStart={(event) => {
+        event.dataTransfer.effectAllowed = 'move'
+        event.dataTransfer.setData('text/plain', tab.title)
+        onDragStart(tab.id)
+      }}
+      onDragEnd={onDragEnd}
       data-title={tab.title}
       data-renamed={tab.renamed}
       data-pane={tab.pane ?? undefined}
@@ -120,14 +144,64 @@ interface StripProps {
   label: string
   editingId: string | null
   onEdit: (id: string | null) => void
+  drag: DragState | null
+  onDrag: (drag: DragState | null) => void
+}
+
+/** Slot under the pointer: before the first tab whose middle is right of it, else the end. */
+function dropIndex(strip: HTMLElement, clientX: number): number {
+  const tabs = [...strip.querySelectorAll<HTMLElement>('[role="tab"]')]
+  const index = tabs.findIndex((el) => {
+    const rect = el.getBoundingClientRect()
+    return clientX < rect.left + rect.width / 2
+  })
+  return index === -1 ? tabs.length : index
 }
 
 /** One row of tabs plus its own "new tab" button (one per column in split view). */
-function TabStrip({ tabs, group, label, editingId, onEdit }: StripProps) {
+function TabStrip({ tabs, group, label, editingId, onEdit, drag, onDrag }: StripProps) {
+  const slot = drag?.target?.group === group ? drag.target.index : null
+
+  const onDragOver = (event: DragEvent<HTMLDivElement>) => {
+    if (!drag) return
+    event.preventDefault()
+    event.dataTransfer.dropEffect = 'move'
+    const index = dropIndex(event.currentTarget, event.clientX)
+    if (drag.target?.group !== group || drag.target.index !== index) onDrag({ id: drag.id, target: { group, index } })
+  }
+  const onDragLeave = (event: DragEvent<HTMLDivElement>) => {
+    if (drag?.target?.group === group && !event.currentTarget.contains(event.relatedTarget as Node | null)) {
+      onDrag({ id: drag.id, target: null })
+    }
+  }
+  const onDrop = (event: DragEvent<HTMLDivElement>) => {
+    if (!drag) return
+    event.preventDefault()
+    void api.moveTab(drag.id, group, dropIndex(event.currentTarget, event.clientX))
+    onDrag(null)
+  }
+
   return (
-    <div className="tabs" role="tablist" aria-label={label} data-testid={`tab-strip-${group}`}>
-      {tabs.map((tab) => (
-        <Tab key={tab.id} tab={tab} editing={editingId === tab.id} onEdit={onEdit} />
+    <div
+      className="tabs"
+      role="tablist"
+      aria-label={label}
+      data-testid={`tab-strip-${group}`}
+      onDragOver={onDragOver}
+      onDragLeave={onDragLeave}
+      onDrop={onDrop}
+    >
+      {tabs.map((tab, index) => (
+        <Tab
+          key={tab.id}
+          tab={tab}
+          editing={editingId === tab.id}
+          onEdit={onEdit}
+          dropMark={slot === index ? 'before' : slot === tabs.length && index === tabs.length - 1 ? 'after' : null}
+          dragging={drag?.id === tab.id}
+          onDragStart={(id) => onDrag({ id, target: null })}
+          onDragEnd={() => onDrag(null)}
+        />
       ))}
       <button
         type="button"
@@ -146,6 +220,7 @@ function TabStrip({ tabs, group, label, editingId, onEdit }: StripProps) {
 export function TabBar({ state }: { state: AppState }) {
   const active = state.tabs.find((tab) => tab.active)
   const [editingId, setEditingId] = useState<string | null>(null)
+  const [drag, setDrag] = useState<DragState | null>(null)
   const focusedGroup = active?.group ?? 0
 
   // "Rename Tab…" from the app menu or the tab's context menu.
@@ -220,11 +295,11 @@ export function TabBar({ state }: { state: AppState }) {
       <header className="topbar topbar--split" data-fullscreen={state.fullscreen}>
         <div className={`topbar__half topbar__half--left${focusedGroup === 0 ? ' topbar__half--focused' : ''}`}>
           {nav}
-          <TabStrip tabs={left} group={0} label="Left column tabs" editingId={editingId} onEdit={setEditingId} />
+          <TabStrip tabs={left} group={0} label="Left column tabs" editingId={editingId} onEdit={setEditingId} drag={drag} onDrag={setDrag} />
         </div>
         <div className="topbar__divider" />
         <div className={`topbar__half topbar__half--right${focusedGroup === 1 ? ' topbar__half--focused' : ''}`}>
-          <TabStrip tabs={right} group={1} label="Right column tabs" editingId={editingId} onEdit={setEditingId} />
+          <TabStrip tabs={right} group={1} label="Right column tabs" editingId={editingId} onEdit={setEditingId} drag={drag} onDrag={setDrag} />
           {actions}
         </div>
       </header>
@@ -234,7 +309,7 @@ export function TabBar({ state }: { state: AppState }) {
   return (
     <header className="topbar" data-fullscreen={state.fullscreen}>
       {nav}
-      <TabStrip tabs={state.tabs} group={0} label="ChatGPT tabs" editingId={editingId} onEdit={setEditingId} />
+      <TabStrip tabs={state.tabs} group={0} label="ChatGPT tabs" editingId={editingId} onEdit={setEditingId} drag={drag} onDrag={setDrag} />
       {actions}
     </header>
   )

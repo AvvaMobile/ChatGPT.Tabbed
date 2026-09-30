@@ -216,6 +216,30 @@ html[data-platform='darwin'] .topbar[data-fullscreen='true'] {
   box-shadow: 0 0 0 1px var(--border);
 }
 
+.tab--dragging {
+  opacity: 0.5;
+}
+
+/* Where a dragged tab would land. */
+.tab--drop-before::before,
+.tab--drop-after::after {
+  content: '';
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--focus);
+}
+
+.tab--drop-before::before {
+  left: -2px;
+}
+
+.tab--drop-after::after {
+  right: -2px;
+}
+
 .tab__icon {
   display: inline-grid;
   place-items: center;

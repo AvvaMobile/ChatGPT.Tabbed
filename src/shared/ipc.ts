@@ -18,6 +18,7 @@ export const IpcChannel = {
   ShowTabMenu: 'tabs:show-menu',
   BeginRename: 'tabs:begin-rename',
   ToggleSplit: 'tabs:toggle-split',
+  MoveTab: 'tabs:move',
   GetSettings: 'settings:get',
   SetSettings: 'settings:set'
 } as const
@@ -106,6 +107,8 @@ export interface RendererApi {
   renameTab(id: string, name: string | null): Promise<void>
   showTabMenu(id: string): Promise<void>
   toggleSplit(): Promise<void>
+  /** Drops a tab into slot `index` (0 = first) of a column; used by drag and drop. */
+  moveTab(id: string, group: 0 | 1, index: number): Promise<void>
   onBeginRename(listener: (id: string) => void): () => void
   getSettings(): Promise<AppSettings>
   setSettings(patch: Partial<AppSettings>): Promise<AppSettings>

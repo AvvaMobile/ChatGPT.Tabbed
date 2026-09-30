@@ -1,7 +1,7 @@
 {
   "name": "chatgpt-tabs-desktop",
   "productName": "ChatGPT Tabs",
-  "version": "1.1.1",
+  "version": "1.2.0",
   "description": "Tabbed desktop client for the ChatGPT web app, built on Electron.",
   "main": "./out/main/index.js",
   "author": "Murat Yilmaz",

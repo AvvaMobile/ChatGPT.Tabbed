@@ -220,6 +220,10 @@ export class AppController {
     this.tabs?.moveToOtherSide(id)
   }
 
+  moveTab(id: string, group: 0 | 1, index: number): void {
+    this.tabs?.moveTab(id, group, index)
+  }
+
   renameTab(id: string, name: string | null): void {
     this.tabs?.renameTab(id, name)
   }

@@ -9,7 +9,7 @@ import { isChatGptUrl, redactUrl } from '../security/navigationPolicy'
 import { applyNavigationPolicy } from '../security/webContentsPolicy'
 import { computeSplitBounds, computeTabViewBounds } from '../window/layout'
 import { attachContextMenu } from './contextMenu'
-import { adjacentTabId, pickNextActiveTab, tabIdForShortcut } from './tabOrder'
+import { adjacentTabId, moveInOrder, pickNextActiveTab, tabIdForShortcut } from './tabOrder'
 
 const log = createLogger('tabs')
 
@@ -377,6 +377,31 @@ export class TabManager extends EventEmitter<TabManagerEvents> {
     source.ids = source.ids.filter((tabId) => tabId !== id)
     target.ids.push(id)
     this.activateTab(id)
+  }
+
+  /**
+   * Drops a tab into slot `index` of a column (drag and drop). Within its own column the tab is
+   * only reordered; dropped into the other column it moves there and becomes that column's
+   * active tab. Emptying a column ends split view.
+   */
+  moveTab(id: string, groupIndex: GroupIndex, index: number): boolean {
+    const from = this.groupOf(id)
+    if (from === null || groupIndex >= this.groups.length || this.destroyed) return false
+    const target = this.groups[groupIndex]
+    if (from === groupIndex) {
+      target.ids = moveInOrder(target.ids, id, index)
+      this.emitChanged()
+      return true
+    }
+    const source = this.groups[from]
+    if (source.activeId === id) source.activeId = pickNextActiveTab(source.ids, id)
+    source.ids = source.ids.filter((tabId) => tabId !== id)
+    target.ids = moveInOrder(target.ids, id, index)
+    if (source.ids.length === 0) {
+      this.groups = [target]
+      this.focused = 0
+    }
+    return this.activateTab(id)
   }
 
   /** Makes a column the focused one (e.g. when the user clicks into it). */
