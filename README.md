@@ -12,7 +12,7 @@ A **Chrome-style tabbed** desktop client for the ChatGPT web app (Electron + Typ
 - Not an OpenAI API client; no API key needed. It uses your existing ChatGPT web account.
 - **No** telemetry, analytics, backend server or auto-update.
 
-> ChatGPT Tabs is an independent wrapper and is not affiliated with OpenAI.
+> ChatGPT Tabs is an independent wrapper and is not affiliated with OpenAI. It is free and source-available for personal and other non-commercial use under the [PolyForm Noncommercial License 1.0.0](LICENSE).
 
 ---
 
@@ -89,6 +89,7 @@ The screenshots are taken from the real app by `node scripts/capture-screenshots
 11. [Tests](#tests)
 12. [Known limitations](#known-limitations)
 13. [Troubleshooting](#troubleshooting)
+14. [License](#license)
 
 ---
 
@@ -438,3 +439,13 @@ Signing in with a real ChatGPT account is intentionally not automated. Manual sm
 | The app does not open a second time | Single-instance lock: the existing window comes to the front |
 | Need verbose logs | macOS: `CHATGPT_TABS_DEBUG=1 "/Applications/ChatGPT Tabs.app/Contents/MacOS/ChatGPT Tabs"`; Windows (PowerShell): `$env:CHATGPT_TABS_DEBUG=1; & "$env:LOCALAPPDATA\Programs\ChatGPT Tabs\ChatGPT Tabs.exe"` (no sensitive data is logged) |
 | Try a separate/clean profile | Launch with `CHATGPT_TABS_USER_DATA_DIR=/tmp/profile ...` |
+
+## License
+
+ChatGPT Tabs is **source-available**, licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE). Copyright (c) 2026 AVVA Mobile.
+
+- ✅ Free to download, use, study and change for **personal and other non-commercial purposes** (hobby projects, private study, research, education, charities and public institutions are explicitly covered).
+- ✅ You may share the app or your changes, as long as you pass on the license and the `Required Notice` line.
+- ❌ **Commercial use is not permitted**: selling the app or a modified version, bundling it into a paid product or service, or using it for a business's commercial purposes.
+
+Because commercial use is excluded, this is not an OSI "open source" license. For commercial licensing, contact AVVA Mobile.

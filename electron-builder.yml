@@ -9,6 +9,9 @@ files:
   - package.json
   - "!**/*.map"
 asar: true
+extraResources:
+  - from: LICENSE
+    to: LICENSE
 npmRebuild: false
 electronFuses:
   runAsNode: false
@@ -39,6 +42,7 @@ win:
   artifactName: ChatGPT-Tabs-${version}-win-${arch}-portable.${ext}
 nsis:
   artifactName: ChatGPT-Tabs-${version}-win-${arch}-setup.${ext}
+  license: LICENSE
   oneClick: false
   perMachine: false
   allowToChangeInstallationDirectory: true

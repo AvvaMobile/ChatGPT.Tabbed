@@ -5,7 +5,7 @@
   "description": "Tabbed desktop client for the ChatGPT web app, built on Electron.",
   "main": "./out/main/index.js",
   "author": "Murat Yilmaz",
-  "license": "UNLICENSED",
+  "license": "PolyForm-Noncommercial-1.0.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/AvvaMobile/ChatGPT.Tabbed.git"
