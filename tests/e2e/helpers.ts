@@ -94,8 +94,8 @@ async function installStubs(app: ElectronApplication): Promise<void> {
 }
 
 export async function getUiPage(app: ElectronApplication): Promise<Page> {
-  await expect.poll(() => app.windows().some((p) => p.url().startsWith('file:'))).toBe(true)
-  const ui = app.windows().find((p) => p.url().startsWith('file:'))
+  await expect.poll(() => app.windows().some((p) => p.url().startsWith('file:') && !p.isClosed())).toBe(true)
+  const ui = app.windows().find((p) => p.url().startsWith('file:') && !p.isClosed())
   if (!ui) throw new Error('shell UI page not found')
   await ui.waitForLoadState('domcontentloaded')
   return ui

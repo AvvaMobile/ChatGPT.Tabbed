@@ -7,6 +7,7 @@ import {
   clickInTab,
   clickMenu,
   getTabPage,
+  getUiPage,
   launchApp,
   mainContentSize,
   openedExternally,
@@ -378,15 +379,23 @@ test('failed loads show an error state with a working retry', async () => {
 })
 
 test('a crashed tab offers recovery', async () => {
-  const { app, ui } = h
+  const { app } = h
   await app.evaluate(({ BrowserWindow, webContents }) => {
     const windowIds = new Set(BrowserWindow.getAllWindows().map((w) => w.webContents.id))
     webContents.getAllWebContents().find((wc) => !windowIds.has(wc.id))!.forcefullyCrashRenderer()
   })
-  await expect(ui.getByTestId('status-panel')).toBeVisible()
-  await expect(ui.getByTestId('retry')).toHaveText('Reload tab')
-  await ui.getByTestId('retry').click()
-  await expect(ui.getByTestId('status-panel')).toHaveCount(0)
+  // On memory-constrained machines Chromium may host the shell UI in the same renderer process;
+  // the app then reloads its UI, so always talk to the current UI page.
+  const liveUi = () => getUiPage(app)
+  await expect(async () => {
+    const ui = await liveUi()
+    await expect(ui.getByTestId('retry')).toHaveText('Reload tab', { timeout: 2000 })
+  }).toPass({ timeout: 20000 })
+  await expect(async () => {
+    const ui = await liveUi()
+    await ui.getByTestId('retry').click({ timeout: 2000 })
+    await expect(ui.getByTestId('status-panel')).toHaveCount(0, { timeout: 2000 })
+  }).toPass({ timeout: 20000 })
   await expect.poll(async () => (await attachedViews(app)).length).toBe(1)
 })
 
