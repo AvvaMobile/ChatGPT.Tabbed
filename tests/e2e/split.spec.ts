@@ -182,11 +182,15 @@ test('both columns and their tabs are restored after a restart', async () => {
     await expect(second.ui.getByTestId('tab-strip-1').getByTestId('tab').nth(1)).toHaveAttribute('data-active', 'true')
     await expect.poll(async () => (await attachedViews(second.app)).length).toBe(2)
     // Only the two visible tabs are loaded.
-    const loaded = await second.app.evaluate(({ BrowserWindow, webContents }) => {
-      const windowIds = new Set(BrowserWindow.getAllWindows().map((w) => w.webContents.id))
-      return webContents.getAllWebContents().filter((wc) => !windowIds.has(wc.id) && wc.getURL() !== '').length
-    })
-    expect(loaded).toBe(2)
+    const loaded = () =>
+      second.app.evaluate(({ BrowserWindow, webContents }) => {
+        const windowIds = new Set(BrowserWindow.getAllWindows().map((w) => w.webContents.id))
+        return webContents.getAllWebContents().filter((wc) => !windowIds.has(wc.id) && wc.getURL() !== '').length
+      })
+    await expect.poll(loaded).toBe(2)
+    // ...and stays at two: the third tab is still deferred.
+    await new Promise((resolve) => setTimeout(resolve, 1000))
+    expect(await loaded()).toBe(2)
     await second.cleanup()
   } finally {
     rmSync(dir, { recursive: true, force: true })
