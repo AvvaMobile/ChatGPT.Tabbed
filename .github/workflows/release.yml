@@ -1,7 +1,8 @@
 name: Release
 
-# Builds macOS (.dmg, Apple Silicon + Intel) and Windows (installer + portable .zip) packages
-# and attaches them to a GitHub Release.
+# Builds the Windows packages (installer + portable .zip) and attaches them to a draft GitHub
+# Release. macOS DMGs are signed and notarized on a Mac with the local signing setup and added
+# with `npm run package:mac:signed && npm run release:mac -- vX.Y.Z` (no macOS runner minutes).
 #   - Push a tag like v1.2.0 -> a draft release named after the tag is created.
 #   - Or run manually from the Actions tab (workflow_dispatch) to only get build artifacts.
 
@@ -20,9 +21,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: macOS
-            os: macos-latest
-            package: npx electron-builder --mac --arm64 --x64
           - name: Windows
             os: windows-latest
             package: npx electron-builder --win --x64
@@ -49,7 +47,6 @@ jobs:
           name: packages-${{ matrix.name }}
           if-no-files-found: error
           path: |
-            release/*.dmg
             release/*-setup.exe
             release/*-portable.zip
 

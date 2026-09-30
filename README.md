@@ -172,8 +172,8 @@ The certificate never leaves the keychain and the API key never leaves the machi
 
 Releases are built by GitHub Actions on real macOS and Windows machines, so nobody has to build installers by hand.
 
-- `.github/workflows/ci.yml` runs lint, typecheck, unit and E2E tests on macOS and Windows for every push and pull request.
-- `.github/workflows/release.yml` builds and smoke-tests the packages on both systems and publishes them.
+- `.github/workflows/ci.yml` runs lint, typecheck, unit and E2E tests on macOS and Windows. It is **manual only** (Actions → CI → Run workflow) to save runner minutes; run the same checks locally with `npm run lint && npm run typecheck && npm test`.
+- `.github/workflows/release.yml` runs when a version tag is pushed: it tests, builds and smoke-tests the **Windows** packages and creates a draft release. The macOS packages are built, signed and notarized locally (step 4 below).
 - `.github/workflows/pages.yml` publishes the one-page website in `site/` to GitHub Pages whenever it changes.
 
 Steps for a maintainer:
@@ -184,13 +184,13 @@ Steps for a maintainer:
    git tag v1.1.0
    git push origin master --tags
    ```
-3. Wait for the **Release** workflow (Actions tab). It creates a **draft** release for the tag containing both `.dmg` files, the Windows installer, the portable `.zip` and `SHA256SUMS.txt`, with auto-generated release notes.
-4. Replace the CI-built (ad-hoc signed) Mac files with signed and notarized ones, from a Mac that has the signing setup described in [Signed and notarized macOS build](#signed-and-notarized-macos-build):
+3. Before tagging, run `npm run lint && npm run typecheck && npm test` locally. Then wait for the **Release** workflow (Actions tab). It creates a **draft** release for the tag containing the Windows installer, the portable `.zip` and `SHA256SUMS.txt`, with auto-generated release notes.
+4. Add the signed and notarized Mac files, from a Mac that has the signing setup described in [Signed and notarized macOS build](#signed-and-notarized-macos-build):
    ```bash
    npm run package:mac:signed
    npm run release:mac -- v1.1.0
    ```
-   This uploads both DMGs to the draft (replacing the CI ones) and updates their lines in `SHA256SUMS.txt`. The script refuses to upload DMGs that are not notarized.
+   This uploads both DMGs to the draft and adds their lines to `SHA256SUMS.txt`. The script refuses to upload DMGs that are not notarized.
 5. Review the draft on the Releases page and click **Publish release**. The [Download](#download) link above always points to the newest published release.
 
 Running the Release workflow manually (Actions → Release → *Run workflow*) builds the same files as downloadable workflow artifacts without creating a release, which is handy for testing.

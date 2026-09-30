@@ -1,9 +1,9 @@
 name: CI
 
+# Manual only (Actions tab -> CI -> Run workflow), to avoid spending runner minutes on every push.
+# Run the same checks locally with: npm run lint && npm run typecheck && npm test
 on:
-  push:
-    branches: [main, master]
-  pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
