@@ -390,6 +390,18 @@ test('a crashed tab offers recovery', async () => {
   await expect.poll(async () => (await attachedViews(app)).length).toBe(1)
 })
 
+test('pages cannot turn parts of themselves into window drag regions', async () => {
+  const { app } = h
+  const region = await app.evaluate(async ({ BrowserWindow }) => {
+    const win = BrowserWindow.getAllWindows().find((w) => w.webContents.getURL().startsWith('file:'))!
+    const view = win.contentView.children[0] as Electron.WebContentsView
+    return view.webContents.executeJavaScript(
+      "getComputedStyle(document.getElementById('dragbar')).getPropertyValue('app-region') || getComputedStyle(document.getElementById('dragbar')).getPropertyValue('-webkit-app-region')"
+    )
+  })
+  expect(region).toBe('no-drag')
+})
+
 test('IPC rejects malformed input', async () => {
   const { ui } = h
   const outcome = await ui.evaluate(async () => {

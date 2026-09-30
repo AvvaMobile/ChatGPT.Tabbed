@@ -16,6 +16,14 @@ const log = createLogger('tabs')
 /** Chromium net error for navigations that were superseded/aborted; not a real failure. */
 const ERR_ABORTED = -3
 
+/**
+ * ChatGPT can mark parts of its page as window drag regions (`app-region: drag`, meant for its
+ * own desktop shell). Inside our window that makes buttons under them unclickable, and a remote
+ * page should never control our window chrome, so every element is forced back to no-drag.
+ * User-origin CSS wins over the page's own `!important` rules; nothing else is changed.
+ */
+const NO_DRAG_CSS = '*, *::before, *::after { -webkit-app-region: no-drag !important; app-region: no-drag !important; }'
+
 export type GroupIndex = 0 | 1
 
 export interface Tab {
@@ -492,6 +500,10 @@ export class TabManager extends EventEmitter<TabManagerEvents> {
     attachContextMenu(contents)
 
     contents.on('page-title-updated', (_event, title) => this.updateTabTitle(tab.id, title))
+
+    contents.on('dom-ready', () => {
+      contents.insertCSS(NO_DRAG_CSS, { cssOrigin: 'user' }).catch(() => undefined)
+    })
 
     contents.on('did-start-loading', () => {
       if (tab.status === 'crashed') return

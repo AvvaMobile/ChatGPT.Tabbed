@@ -80,6 +80,7 @@ async function installStubs(app: ElectronApplication): Promise<void> {
       if (url.hostname !== 'chatgpt.com') return new Response('not found', { status: 404 })
       g.__hits[url.pathname] = (g.__hits[url.pathname] ?? 0) + 1
       const html = `<!doctype html><html><head><title>Stub ${url.pathname}</title></head><body>
+        <header id="dragbar" style="-webkit-app-region: drag; app-region: drag; height: 20px">header</header>
         <h1 id="path">${url.pathname}</h1>
         <a id="ext" href="https://example.com/ext">external</a>
         <a id="blank" target="_blank" href="https://example.org/blank">external blank</a>
